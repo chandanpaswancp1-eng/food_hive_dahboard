@@ -450,3 +450,19 @@ table.data-table {
   text-align: center;
   color: var(--neutral-600);
 }
+
+/* ---- db error banner ---- */
+
+.db-error-banner {
+  border-color: var(--color-accent);
+  max-width: 640px;
+}
+
+.db-error-banner h4 {
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.db-error-banner p {
+  color: var(--neutral-700);
+  font-size: 13px;
+}

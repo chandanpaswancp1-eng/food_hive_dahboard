@@ -29,11 +29,18 @@ export default function DashboardPage() {
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [drillOpen, setDrillOpen] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
 
   useEffect(() => {
     fetch("/api/filter-options")
-      .then((r) => r.json())
-      .then(setOptions)
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) {
+          if (data?.error === "database_unavailable") setDbError(data.message);
+          return;
+        }
+        setOptions(data);
+      })
       .catch(() => {});
   }, []);
 
@@ -53,9 +60,18 @@ export default function DashboardPage() {
   useEffect(() => {
     let cancelled = false;
     fetch(`/api/kpis/${activeTab}?${filtersToParams(filters)}`)
-      .then((r) => r.json())
-      .then((data) => {
-        if (!cancelled) setPayload(data);
+      .then(async (r) => {
+        const data = await r.json();
+        if (cancelled) return;
+        if (!r.ok) {
+          if (data?.error === "database_unavailable") {
+            setDbError(data.message);
+            setPayload(null);
+          }
+          return;
+        }
+        setDbError(null);
+        setPayload(data);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -110,7 +126,15 @@ export default function DashboardPage() {
       />
       <TabBar active={activeTab} onChange={updateTab} />
       <main className="dashboard-main">
-        <DashboardTabView payload={payload} loading={loading} onRowClick={() => setDrillOpen(true)} />
+        {dbError ? (
+          <div className="panel db-error-banner">
+            <div className="badge">Database Unavailable</div>
+            <h4>Can&rsquo;t reach the database</h4>
+            <p>{dbError}</p>
+          </div>
+        ) : (
+          <DashboardTabView payload={payload} loading={loading} onRowClick={() => setDrillOpen(true)} />
+        )}
       </main>
       {drillOpen && <DrillThroughModal filters={filters} onClose={() => setDrillOpen(false)} />}
     </div>
