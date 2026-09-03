@@ -1,0 +1,189 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrderStatus {
+  COMPLETED
+  CANCELLED
+}
+
+enum ItemType {
+  MENU_ITEM
+  MODIFIER
+}
+
+enum SyncStatus {
+  SUCCESS
+  ERROR
+  RUNNING
+}
+
+model Brand {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  cuisine       String?
+  colorHex      String?
+  orders        Order[]
+  stockouts     StockoutEvent[]
+  createdAt     DateTime       @default(now())
+}
+
+model Location {
+  id         String          @id @default(cuid())
+  name       String          @unique
+  vendorArea String?
+  city       String?
+  code       String?
+  orders     Order[]
+  stockouts  StockoutEvent[]
+  createdAt  DateTime        @default(now())
+}
+
+model Channel {
+  id             String          @id @default(cuid())
+  name           String          @unique
+  channelType    String?
+  commissionRate Decimal?        @db.Decimal(5, 2)
+  orders         Order[]
+  stockouts      StockoutEvent[]
+  createdAt      DateTime        @default(now())
+}
+
+model CancellationReason {
+  id                 String   @id @default(cuid())
+  code               String?  @unique
+  description        String
+  responsibleParty   String?
+  orders             Order[]
+  createdAt          DateTime @default(now())
+}
+
+model Order {
+  id                String       @id @default(cuid())
+  externalId        String       @unique
+  orderNumber       String
+
+  brandId           String
+  brand             Brand        @relation(fields: [brandId], references: [id])
+  locationId        String
+  location          Location     @relation(fields: [locationId], references: [id])
+  channelId         String
+  channel           Channel      @relation(fields: [channelId], references: [id])
+  cancellationReasonId String?
+  cancellationReason   CancellationReason? @relation(fields: [cancellationReasonId], references: [id])
+
+  // milestone timestamps
+  receivedAt        DateTime
+  acceptedAt        DateTime?
+  startedAt         DateTime?
+  preparedAt        DateTime?
+  sentToDispatchAt  DateTime?
+  dispatchedAt      DateTime?
+  deliveredAt       DateTime?
+
+  // derived stage durations (minutes)
+  durAccToStarted           Decimal? @db.Decimal(8, 2)
+  durStartedToPrep          Decimal? @db.Decimal(8, 2)
+  durPrepToSTD              Decimal? @db.Decimal(8, 2)
+  durSTDToDispatched        Decimal? @db.Decimal(8, 2)
+  durReceivingToDispatched  Decimal? @db.Decimal(8, 2)
+  durReceivedToDelivered    Decimal? @db.Decimal(8, 2)
+
+  // financials
+  netSales          Decimal   @db.Decimal(12, 2)
+  receiptTotal      Decimal   @db.Decimal(12, 2)
+  discountAmount    Decimal   @default(0) @db.Decimal(12, 2)
+  discountPercent   Decimal   @default(0) @db.Decimal(5, 2)
+  paymentMethod     String?
+
+  // status
+  status            OrderStatus
+  isPostCancelled   Boolean     @default(false)
+  deliveryPartner   String?
+
+  // derived calendar fields (denormalized for fast grouping)
+  dayName           String?
+  dayOfWeek         Int?
+  hour              Int?
+  timeSlot          String?
+  timeOfDay         String?
+
+  // prep/delay
+  estimatedPrepTime Decimal?  @db.Decimal(8, 2)
+  actualPrepTime    Decimal?  @db.Decimal(8, 2)
+  delayMinutes      Decimal?  @db.Decimal(8, 2)
+  isDelayed         Boolean   @default(false)
+
+  items             OrderItem[]
+  ratings           Rating[]
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([receivedAt, brandId, locationId, channelId, status])
+  @@index([status])
+}
+
+model OrderItem {
+  id          String   @id @default(cuid())
+  orderId     String
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  name        String
+  itemType    ItemType
+  itemSource  String?
+  quantity    Int
+  unitPrice   Decimal  @db.Decimal(10, 2)
+  totalPrice  Decimal  @db.Decimal(10, 2)
+
+  @@index([orderId])
+}
+
+model Rating {
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  value          Int
+  category       String?
+  comment        String?
+  ratedAt        DateTime
+
+  @@index([orderId])
+}
+
+/// "86'd" / sold-out items tracking — distinct from OrderItem sales volume.
+model StockoutEvent {
+  id                  String    @id @default(cuid())
+  itemName            String
+  brandId             String?
+  brand               Brand?    @relation(fields: [brandId], references: [id])
+  locationId          String?
+  location            Location? @relation(fields: [locationId], references: [id])
+  channelId           String?
+  channel             Channel?  @relation(fields: [channelId], references: [id])
+  markedUnavailableAt DateTime
+  restoredAt          DateTime?
+  durationMinutes     Decimal?  @db.Decimal(10, 2)
+  source              String?
+
+  createdAt           DateTime  @default(now())
+
+  @@index([markedUnavailableAt, brandId, locationId])
+}
+
+model SyncLog {
+  id               String     @id @default(cuid())
+  startedAt        DateTime   @default(now())
+  finishedAt       DateTime?
+  status           SyncStatus @default(RUNNING)
+  recordsIngested  Int        @default(0)
+  errorMessage     String?
+  source           String     @default("grubcenter")
+
+  @@index([startedAt])
+}
