@@ -18,3 +18,8 @@ export function fmtMinutes(n: number | null | undefined): string {
 export function safeDiv(numerator: number, denominator: number): number {
   return denominator === 0 ? 0 : numerator / denominator;
 }
+
+/** Rounds floating-point sums (e.g. 2929.8399999999992) to 2 decimals before they hit JSON/charts. */
+export function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}

@@ -13,20 +13,48 @@ const SLATE = "#605d5d";
 
 const PALETTE = [INK, ACCENT, MUTE, LIGHT, DEEP, SLATE];
 
+// Sums/averages computed via floating-point arithmetic (e.g. 2929.8399999999992)
+// need rounding before display — Chart.js shows raw values otherwise.
+function formatNumber(value: number): string {
+  return Number.isFinite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: 1 }) : String(value);
+}
+
 function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x") {
+  const valueTicks = { callback: (value: unknown) => formatNumber(Number(value)) };
+
   return {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis,
     plugins: {
       legend: { display: true, position: "bottom" as const },
-      tooltip: { backgroundColor: INK, cornerRadius: 0, titleFont: { weight: 800 as const } },
+      tooltip: {
+        backgroundColor: INK,
+        cornerRadius: 0,
+        titleFont: { weight: 800 as const },
+        callbacks: {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          label: (ctx: any) => {
+            const raw = indexAxis === "y" ? ctx.parsed.x : ctx.parsed.y;
+            return `${ctx.dataset.label ?? ""}: ${formatNumber(raw)}`;
+          },
+        },
+      },
     },
     scales: {
-      x: { grid: { color: LIGHT }, border: { color: INK } },
-      y: { grid: { color: LIGHT }, border: { color: INK }, position: "left" as const },
+      x: {
+        grid: { color: LIGHT },
+        border: { color: INK },
+        ...(indexAxis === "y" ? { ticks: valueTicks } : {}),
+      },
+      y: {
+        grid: { color: LIGHT },
+        border: { color: INK },
+        position: "left" as const,
+        ...(indexAxis === "x" ? { ticks: valueTicks } : {}),
+      },
       ...(hasSecondAxis
-        ? { y1: { position: "right" as const, grid: { display: false }, border: { color: INK } } }
+        ? { y1: { position: "right" as const, grid: { display: false }, border: { color: INK }, ticks: valueTicks } }
         : {}),
     },
   };
@@ -55,7 +83,21 @@ export function ChartPanel({ spec }: { spec: ChartSpec }) {
     body = (
       <Doughnut
         data={{ labels: spec.labels, datasets: [{ data: spec.datasets[0]?.data ?? [], backgroundColor: PALETTE }] }}
-        options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { position: "bottom" } } }}
+        options={{
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: "bottom" },
+            tooltip: {
+              backgroundColor: INK,
+              cornerRadius: 0,
+              callbacks: {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                label: (ctx: any) => `${ctx.label}: ${formatNumber(ctx.parsed)}`,
+              },
+            },
+          },
+        }}
       />
     );
   } else if (spec.type === "hbar") {

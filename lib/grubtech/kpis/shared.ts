@@ -38,9 +38,14 @@ export async function loadStockouts(where: Prisma.StockoutEventWhereInput) {
 
 export type LoadedStockout = Awaited<ReturnType<typeof loadStockouts>>[number];
 
+/**
+ * Converts a Prisma Decimal/aggregate result to a plain JS number, rounded
+ * to 2dp — SUM()/AVG() over Decimal columns routinely produce values like
+ * 2929.8399999999992 that need cleaning up before they reach charts or JSON.
+ */
 export function num(value: unknown): number {
   if (value === null || value === undefined) return 0;
-  return Number(value);
+  return Math.round(Number(value) * 100) / 100;
 }
 
 export function dateKey(d: Date): string {
