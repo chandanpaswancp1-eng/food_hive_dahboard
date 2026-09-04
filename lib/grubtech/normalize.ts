@@ -1,41 +1,93 @@
 import { z } from "zod";
 
 /**
- * GrubCenter's internal report APIs haven't been captured yet (run
- * `npm run discover:grubcenter` first — see scraper/discover.ts). The alias
- * lists below are a best guess seeded from the old Kaykroo prototype's
- * Grubtech field-mapping code (snake_case and camelCase variants). Once real
- * payloads are captured, update ALIASES to match and re-run `npm run
- * sync:once` — nothing else needs to change.
+ * Field-alias map, matched exactly (case/space-sensitive) against whatever
+ * key names a row actually has. Two sources feed this:
+ *  - GrubCenter's internal report APIs (not captured yet — run
+ *    `npm run discover:grubcenter`, see scraper/discover.ts), guessed from
+ *    the old Kaykroo prototype's Grubtech field-mapping (snake_case/camelCase).
+ *  - Real GrubCenter Excel exports (order-details_*.xlsx, cancelled-orders_*.xlsx,
+ *    uploaded via the dashboard's Import button) — headers confirmed from a
+ *    same-system reference file (Kaykroo_Dashboard.xlsx / data.xlsx), e.g.
+ *    "Unique Order ID", "Net Sales (AED)", "Post Cancelled".
+ * If an import's issues list shows missing required fields, the real header
+ * name didn't match anything here — add it and re-import, nothing else needs
+ * to change.
  */
 const ALIASES = {
-  id: ["id", "order_id", "orderId"],
-  orderNumber: ["order_number", "orderNumber", "number"],
-  brand: ["brand_name", "brandName", "brand"],
-  cuisine: ["cuisine", "cuisine_cluster", "cuisineCluster"],
-  location: ["location_name", "locationName", "location", "outlet"],
+  id: ["Unique Order ID", "Order ID", "id", "order_id", "orderId"],
+  orderNumber: ["Order ID", "order_number", "orderNumber", "number"],
+  brand: ["Brand", "brand_name", "brandName", "brand"],
+  cuisine: ["Cuisine Cluster", "cuisine", "cuisine_cluster", "cuisineCluster"],
+  location: ["Location", "location_name", "locationName", "location", "outlet"],
   vendorArea: ["vendor_area", "vendorArea", "area"],
-  channel: ["channel", "channel_name", "channelName"],
-  paymentMethod: ["payment_method", "paymentMethod"],
-  receivedAt: ["received_at", "receivedAt", "created_at", "createdAt"],
+  channel: ["Channel", "channel", "channel_name", "channelName"],
+  paymentMethod: ["Payment Method", "payment_method", "paymentMethod"],
+  receivedAt: [
+    "Received At",
+    "Received Date",
+    "Date",
+    "received_at",
+    "receivedAt",
+    "created_at",
+    "createdAt",
+  ],
   acceptedAt: ["accepted_at", "acceptedAt"],
   startedAt: ["started_at", "startedAt"],
   preparedAt: ["prepared_at", "preparedAt"],
   sentToDispatchAt: ["sent_to_dispatch_at", "sentToDispatchAt"],
   dispatchedAt: ["dispatched_at", "dispatchedAt"],
   deliveredAt: ["delivered_at", "deliveredAt"],
-  netSales: ["net_sales", "netSales"],
-  receiptTotal: ["receipt_total", "receiptTotal", "total"],
-  discountAmount: ["discount_amount", "discountAmount"],
-  status: ["order_status", "orderStatus", "status"],
-  cancellationReason: ["cancellation_reason", "cancellationReason", "reason"],
-  isPostCancelled: ["is_post_cancelled", "isPostCancelled"],
-  deliveryPartner: ["delivery_partner", "deliveryPartner"],
+  netSales: ["Net Sales (AED)", "Net Sales", "net_sales", "netSales"],
+  receiptTotal: [
+    "Receipt Total (AED)",
+    "Total(Receipt Total)",
+    "Sales After Tax",
+    "receipt_total",
+    "receiptTotal",
+    "total",
+  ],
+  discountAmount: ["Discount (AED)", "Discount", "discount_amount", "discountAmount"],
+  status: ["Order Status", "order_status", "orderStatus", "status"],
+  cancellationReason: [
+    "Cancellation Reason",
+    "Reason",
+    "cancellation_reason",
+    "cancellationReason",
+    "reason",
+  ],
+  isPostCancelled: ["Post Cancelled", "is_post_cancelled", "isPostCancelled"],
+  deliveryPartner: [
+    "Delivery Partner",
+    "Delivery Partner Name",
+    "delivery_partner",
+    "deliveryPartner",
+  ],
+  /**
+   * Some exports split date and hour into separate columns — "Received Date"
+   * is date-only (a constant, meaningless time-of-day baked in) and the real
+   * intraday signal lives here. When present, this overrides the hour
+   * normalizeRawOrder would otherwise read off receivedAt's timestamp.
+   */
+  hour: ["Order Hour", "order_hour", "hour"],
   estimatedPrepTime: ["estimated_prep_time", "estimatedPrepTime"],
   actualPrepTime: ["actual_prep_time", "actualPrepTime"],
   rating: ["rating", "rating_value", "ratingValue"],
   items: ["items", "line_items", "lineItems"],
 } as const;
+
+/**
+ * `z.coerce.boolean()` would treat the string "No" as truthy (JS `Boolean("No")`
+ * is `true`) — real exports use "Yes"/"No" text, so this parses that explicitly.
+ */
+const YesNoBoolean = z
+  .union([z.boolean(), z.string(), z.number()])
+  .optional()
+  .transform((value) => {
+    if (value === undefined) return undefined;
+    if (typeof value === "boolean") return value;
+    return /^(yes|true|1)$/i.test(String(value).trim());
+  });
 
 function pick(raw: Record<string, unknown>, keys: readonly string[]): unknown {
   for (const key of keys) {
@@ -63,6 +115,7 @@ const NormalizedOrderInput = z.object({
   channel: z.string().min(1),
   paymentMethod: z.string().optional(),
   receivedAt: z.string().min(1),
+  hour: z.coerce.number().min(0).max(23).optional(),
   acceptedAt: z.string().optional(),
   startedAt: z.string().optional(),
   preparedAt: z.string().optional(),
@@ -74,7 +127,7 @@ const NormalizedOrderInput = z.object({
   discountAmount: z.coerce.number().optional(),
   status: z.string().optional(),
   cancellationReason: z.string().optional(),
-  isPostCancelled: z.coerce.boolean().optional(),
+  isPostCancelled: YesNoBoolean,
   deliveryPartner: z.string().optional(),
   estimatedPrepTime: z.coerce.number().optional(),
   actualPrepTime: z.coerce.number().optional(),
@@ -170,14 +223,20 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
 
   const data = parsed.data;
   const receivedDate = new Date(data.receivedAt);
+  if (data.hour !== undefined) {
+    // Date-only column + a separate real hour column — the timestamp's own
+    // time-of-day is a meaningless constant, so splice in the real hour.
+    receivedDate.setUTCHours(data.hour, 0, 0, 0);
+  }
   const hour = receivedDate.getUTCHours();
+  const receivedAtIso = receivedDate.toISOString();
 
   const durAccToStarted = minutesBetween(data.acceptedAt, data.startedAt);
   const durStartedToPrep = minutesBetween(data.startedAt, data.preparedAt);
   const durPrepToSTD = minutesBetween(data.preparedAt, data.sentToDispatchAt);
   const durSTDToDispatched = minutesBetween(data.sentToDispatchAt, data.dispatchedAt);
-  const durReceivingToDispatched = minutesBetween(data.receivedAt, data.dispatchedAt);
-  const durReceivedToDelivered = minutesBetween(data.receivedAt, data.deliveredAt);
+  const durReceivingToDispatched = minutesBetween(receivedAtIso, data.dispatchedAt);
+  const durReceivedToDelivered = minutesBetween(receivedAtIso, data.deliveredAt);
 
   const delayMinutes =
     data.actualPrepTime !== undefined && data.estimatedPrepTime !== undefined
@@ -188,6 +247,7 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
     ok: true,
     order: {
       ...data,
+      receivedAt: receivedAtIso,
       durations: {
         durAccToStarted,
         durStartedToPrep,

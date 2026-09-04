@@ -38,7 +38,7 @@ export function Header({ sync, onImport, onExport, onRefresh, refreshing }: Prop
           Import CSV / Excel
           <input
             type="file"
-            accept=".csv,.txt"
+            accept=".csv,.txt,.xlsx,.xls"
             style={{ display: "none" }}
             onChange={(e) => {
               const file = e.target.files?.[0];
