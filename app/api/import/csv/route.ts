@@ -3,6 +3,8 @@ import { parseCsv } from "@/lib/csv";
 import { parseWorkbook } from "@/lib/excel";
 import { ingestRawOrders, type IngestResult } from "@/lib/grubtech/ingest";
 import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
+import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
+import { invalidateTabCache } from "@/lib/grubtech/kpis";
 
 export const runtime = "nodejs";
 
@@ -45,6 +47,8 @@ export async function POST(req: NextRequest) {
       const text = await file.text();
       const rows = parseCsv(text);
       const result = await ingestRawOrders(rows);
+      invalidateDimensionCache();
+      invalidateTabCache();
       return NextResponse.json(result);
     }
 
@@ -77,6 +81,8 @@ export async function POST(req: NextRequest) {
       combined.issues.push(...result.issues);
     }
 
+    invalidateDimensionCache();
+    invalidateTabCache();
     return NextResponse.json({ ...combined, detected });
   } catch (error) {
     if (isDbConnectionError(error)) return dbErrorResponse(error);

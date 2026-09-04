@@ -19,6 +19,8 @@ import { existsSync } from "node:fs";
 import path from "node:path";
 import { prisma } from "../lib/db";
 import { ingestRawOrders } from "../lib/grubtech/ingest";
+import { invalidateDimensionCache } from "../lib/grubtech/kpis/shared";
+import { invalidateTabCache } from "../lib/grubtech/kpis";
 
 const BASE_URL = process.env.GRUBCENTER_BASE_URL ?? "https://grubcenter.grubtech.io";
 const STORAGE_STATE_PATH = path.join(__dirname, "storageState.json");
@@ -115,6 +117,9 @@ export async function runGrubcenterSync(): Promise<{ recordsIngested: number; is
     }
 
     await browser.close();
+
+    invalidateDimensionCache();
+    invalidateTabCache();
 
     await prisma.syncLog.update({
       where: { id: syncLog.id },
