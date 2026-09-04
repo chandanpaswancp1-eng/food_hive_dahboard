@@ -97,7 +97,7 @@ function isTransientError(error: unknown): boolean {
   return TRANSIENT_ERROR_HINTS.some((hint) => message.includes(hint));
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
+async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
@@ -105,7 +105,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 3): Promise<T> {
     } catch (error) {
       lastError = error;
       if (attempt === attempts || !isTransientError(error)) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 300 * attempt));
+      await new Promise((resolve) => setTimeout(resolve, 400 * attempt));
     }
   }
   throw lastError;
@@ -220,7 +220,11 @@ export interface IngestResult {
   issues: string[];
 }
 
-const INGEST_CONCURRENCY = 8;
+// Kept modest since DATABASE_URL now goes through Supabase's transaction-mode
+// pgbouncer pooler (connection_limit=10) rather than a direct connection —
+// pushing more concurrent DB ops than the pool can serve caused rows to be
+// silently dropped on a real import (only 651/1450 landed) despite retries.
+const INGEST_CONCURRENCY = 4;
 
 export async function ingestRawOrders(rawOrders: unknown[]): Promise<IngestResult> {
   const cache = new DimensionCache();

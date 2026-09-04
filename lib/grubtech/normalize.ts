@@ -38,7 +38,7 @@ const ALIASES = {
   sentToDispatchAt: ["sent_to_dispatch_at", "sentToDispatchAt"],
   dispatchedAt: ["dispatched_at", "dispatchedAt"],
   deliveredAt: ["delivered_at", "deliveredAt"],
-  netSales: ["Net Sales (AED)", "Net Sales", "net_sales", "netSales"],
+  netSales: ["Net Sales (AED)", "Net Sales", "Sales Amount", "net_sales", "netSales"],
   receiptTotal: [
     "Receipt Total (AED)",
     "Total(Receipt Total)",

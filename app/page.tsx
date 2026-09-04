@@ -30,8 +30,20 @@ export default function DashboardPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [drillOpen, setDrillOpen] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
+  // Network to the DB has been intermittent (a real flaky-connection window,
+  // not a one-off) — a fetch landing exactly during an outage would leave
+  // the page stuck on the error banner forever with nothing to retry it.
+  // This ticks every 15s so both effects below self-heal once the backend
+  // recovers, without the user needing to change tabs/filters.
+  const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
+    const id = setInterval(() => setRetryTick((t) => t + 1), 15000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (options) return; // already loaded — no need to keep polling
     fetch("/api/filter-options")
       .then(async (r) => {
         const data = await r.json();
@@ -42,7 +54,7 @@ export default function DashboardPage() {
         setOptions(data);
       })
       .catch(() => {});
-  }, []);
+  }, [options, retryTick]);
 
   const loadSyncStatus = useCallback(() => {
     fetch("/api/sync/status")
@@ -53,9 +65,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     loadSyncStatus();
-    const id = setInterval(loadSyncStatus, 15000);
-    return () => clearInterval(id);
-  }, [loadSyncStatus]);
+  }, [loadSyncStatus, retryTick]);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +89,7 @@ export default function DashboardPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, filters]);
+  }, [activeTab, filters, retryTick]);
 
   const updateFilters = (next: DashboardFilters) => {
     setLoading(true);
