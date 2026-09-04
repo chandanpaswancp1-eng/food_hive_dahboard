@@ -7,11 +7,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "prisma:generate": "prisma generate",
-    "prisma:migrate": "prisma migrate dev",
+    "prisma:generate": "dotenv -e .env.local -- prisma generate",
+    "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "playwright:install": "playwright install chromium",
-    "discover:grubcenter": "tsx scraper/discover.ts",
-    "sync:once": "tsx scraper/sync.ts"
+    "discover:grubcenter": "dotenv -e .env.local -- tsx scraper/discover.ts",
+    "sync:once": "dotenv -e .env.local -- tsx scraper/sync.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
