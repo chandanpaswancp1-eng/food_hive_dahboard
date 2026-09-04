@@ -8,9 +8,11 @@ interface Props {
   onExport: () => void;
   onRefresh: () => void;
   refreshing: boolean;
+  importing: boolean;
+  importMessage?: string | null;
 }
 
-export function Header({ sync, onImport, onExport, onRefresh, refreshing }: Props) {
+export function Header({ sync, onImport, onExport, onRefresh, refreshing, importing, importMessage }: Props) {
   const dotClass =
     sync?.mode === "live" ? "live" : sync?.mode === "error" ? "error" : sync?.mode === "local" ? "local" : "";
   const label =
@@ -34,15 +36,16 @@ export function Header({ sync, onImport, onExport, onRefresh, refreshing }: Prop
           <span>{label}</span>
           {sync?.lastSyncedAt && <span>· {new Date(sync.lastSyncedAt).toLocaleTimeString()}</span>}
         </div>
+        {importMessage && <span className="panel-caption">{importMessage}</span>}
         <label className="btn btn-secondary">
-          Import CSV / Excel
+          {importing ? "Importing…" : "Import CSV / Excel"}
           <input
             type="file"
             accept=".csv,.txt,.xlsx,.xls"
             style={{ display: "none" }}
             onChange={(e) => {
               const file = e.target.files?.[0];
-              if (file) onImport(file);
+              if (file && !importing) onImport(file);
               e.target.value = "";
             }}
           />

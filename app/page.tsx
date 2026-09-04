@@ -28,6 +28,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   // Network to the DB has been intermittent (a real flaky-connection window,
@@ -102,10 +104,47 @@ export default function DashboardPage() {
   };
 
   const handleImport = async (file: File) => {
+    setImporting(true);
+    setImportMessage(null);
     const form = new FormData();
     form.append("file", file);
-    await fetch("/api/import/csv", { method: "POST", body: form });
-    updateFilters({ ...filters });
+
+    // Ingestion is DB-latency-bound and can take minutes for a large file —
+    // the route starts it in the background and returns a jobId immediately
+    // (see app/api/import/csv/route.ts), so we poll rather than await it.
+    // A synchronous await here previously got killed by a platform proxy
+    // timeout on a real 40MB import.
+    try {
+      const res = await fetch("/api/import/csv", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok || !data.jobId) {
+        setImporting(false);
+        setImportMessage(data?.message ?? "Import failed to start");
+        return;
+      }
+
+      const poll = async () => {
+        const jobRes = await fetch(`/api/jobs/${data.jobId}`);
+        const job = await jobRes.json();
+        if (job.status === "RUNNING") {
+          setTimeout(poll, 3000);
+          return;
+        }
+        setImporting(false);
+        if (job.status === "SUCCESS") {
+          setImportMessage(
+            `Imported ${job.recordsIngested} orders${job.errorMessage ? " (some rows had issues)" : ""}`,
+          );
+          updateFilters({ ...filters });
+        } else {
+          setImportMessage(job.errorMessage ?? "Import failed");
+        }
+      };
+      poll();
+    } catch {
+      setImporting(false);
+      setImportMessage("Import failed to start");
+    }
   };
 
   const handleExport = () => {
@@ -126,7 +165,15 @@ export default function DashboardPage() {
 
   return (
     <div>
-      <Header sync={sync} onImport={handleImport} onExport={handleExport} onRefresh={handleRefresh} refreshing={refreshing} />
+      <Header
+        sync={sync}
+        onImport={handleImport}
+        onExport={handleExport}
+        onRefresh={handleRefresh}
+        refreshing={refreshing}
+        importing={importing}
+        importMessage={importMessage}
+      />
       <FilterBar
         filters={filters}
         options={options}

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseCsv } from "@/lib/csv";
 import { parseWorkbook } from "@/lib/excel";
-import { ingestRawOrders, type IngestResult } from "@/lib/grubtech/ingest";
+import { ingestRawOrders } from "@/lib/grubtech/ingest";
 import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
 import { invalidateTabCache } from "@/lib/grubtech/kpis";
+import { prisma } from "@/lib/db";
 
 export const runtime = "nodejs";
 
@@ -32,6 +33,41 @@ function withDefaultStatus(rows: Record<string, string>[], status: "Completed" |
   return rows.map((row) => (row["Order Status"] ? row : { ...row, "Order Status": status }));
 }
 
+/**
+ * Ingestion itself is the slow part (DB-latency-bound, can run minutes for a
+ * large file) — running it inline blocked the HTTP request until it finished,
+ * which is exactly what got killed by a platform proxy timeout on a real
+ * 40MB import. Runs detached (not awaited by the caller); the client polls
+ * /api/jobs/[id] instead, the same fire-and-forget + poll pattern
+ * scraper/sync.ts already uses for GrubCenter syncs.
+ */
+async function runImportInBackground(jobId: string, rows: Record<string, string>[], preIssues: string[]) {
+  try {
+    const result = await ingestRawOrders(rows);
+    invalidateDimensionCache();
+    invalidateTabCache();
+    const issues = [...preIssues, ...result.issues];
+    await prisma.syncLog.update({
+      where: { id: jobId },
+      data: {
+        status: "SUCCESS",
+        finishedAt: new Date(),
+        recordsIngested: result.ingested,
+        errorMessage: issues.length ? issues.slice(0, 20).join(" | ") : null,
+      },
+    });
+  } catch (error) {
+    await prisma.syncLog.update({
+      where: { id: jobId },
+      data: {
+        status: "ERROR",
+        finishedAt: new Date(),
+        errorMessage: error instanceof Error ? error.message.split("\n").pop() : String(error),
+      },
+    });
+  }
+}
+
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file");
@@ -43,47 +79,49 @@ export async function POST(req: NextRequest) {
   const isExcel = /\.xlsx?$/i.test(file.name);
 
   try {
+    let rowsToIngest: Record<string, string>[];
+    const detected: { sheetName: string; reportType: ReportType; headers: string[] }[] = [];
+    const preIssues: string[] = [];
+
     if (!isExcel) {
       const text = await file.text();
-      const rows = parseCsv(text);
-      const result = await ingestRawOrders(rows);
-      invalidateDimensionCache();
-      invalidateTabCache();
-      return NextResponse.json(result);
-    }
+      rowsToIngest = parseCsv(text);
+    } else {
+      const buffer = Buffer.from(await file.arrayBuffer());
+      const sheets = await parseWorkbook(buffer, process.env.EXCEL_IMPORT_PASSWORD);
 
-    const buffer = Buffer.from(await file.arrayBuffer());
-    const sheets = await parseWorkbook(buffer, process.env.EXCEL_IMPORT_PASSWORD);
+      rowsToIngest = [];
+      for (const sheet of sheets) {
+        if (!sheet.rows.length) continue;
+        const reportType = detectReportType(file.name, sheet.headers);
+        detected.push({ sheetName: sheet.sheetName, reportType, headers: sheet.headers });
 
-    const combined: IngestResult = { ingested: 0, skipped: 0, issues: [] };
-    const detected: { sheetName: string; reportType: ReportType; headers: string[] }[] = [];
+        if (reportType === "location-performance-averages") {
+          preIssues.push(
+            `Sheet "${sheet.sheetName}": location-performance-averages import isn't supported yet (unknown real shape) — skipped ${sheet.rows.length} rows.`,
+          );
+          continue;
+        }
 
-    for (const sheet of sheets) {
-      if (!sheet.rows.length) continue;
-      const reportType = detectReportType(file.name, sheet.headers);
-      detected.push({ sheetName: sheet.sheetName, reportType, headers: sheet.headers });
-
-      if (reportType === "location-performance-averages") {
-        combined.issues.push(
-          `Sheet "${sheet.sheetName}": location-performance-averages import isn't supported yet (unknown real shape) — skipped ${sheet.rows.length} rows.`,
-        );
-        continue;
+        const rows =
+          reportType === "cancelled-orders"
+            ? withDefaultStatus(sheet.rows, "Cancelled")
+            : withDefaultStatus(sheet.rows, "Completed");
+        rowsToIngest.push(...rows);
       }
-
-      const rows =
-        reportType === "cancelled-orders"
-          ? withDefaultStatus(sheet.rows, "Cancelled")
-          : withDefaultStatus(sheet.rows, "Completed");
-
-      const result = await ingestRawOrders(rows);
-      combined.ingested += result.ingested;
-      combined.skipped += result.skipped;
-      combined.issues.push(...result.issues);
     }
 
-    invalidateDimensionCache();
-    invalidateTabCache();
-    return NextResponse.json({ ...combined, detected });
+    const job = await prisma.syncLog.create({ data: { status: "RUNNING", source: "import" } });
+    runImportInBackground(job.id, rowsToIngest, preIssues).catch((err) => {
+      console.error("Background import failed:", err);
+    });
+
+    return NextResponse.json({
+      status: "started",
+      jobId: job.id,
+      rowCount: rowsToIngest.length,
+      detected,
+    });
   } catch (error) {
     if (isDbConnectionError(error)) return dbErrorResponse(error);
     if (error instanceof Error && error.message.includes("password-protected")) {

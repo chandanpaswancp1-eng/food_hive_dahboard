@@ -93,6 +93,12 @@ export interface SyncStatusPayload {
   message?: string;
 }
 
+export interface JobStatusPayload {
+  status: "RUNNING" | "SUCCESS" | "ERROR";
+  recordsIngested: number;
+  errorMessage: string | null;
+}
+
 export interface DrillThroughRow {
   id: string;
   orderNumber: string;
