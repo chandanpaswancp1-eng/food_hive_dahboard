@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { parseCsv } from "@/lib/csv";
 import { parseWorkbook } from "@/lib/excel";
 import { ingestRawOrders } from "@/lib/grubtech/ingest";
+import { ingestLocationPerformanceAverages } from "@/lib/grubtech/ingestLocationPerformance";
 import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
 import { invalidateTabCache } from "@/lib/grubtech/kpis";
@@ -63,18 +64,28 @@ function withDefaultStatus(rows: Record<string, string>[], status: "Completed" |
  * /api/jobs/[id] instead, the same fire-and-forget + poll pattern
  * scraper/sync.ts already uses for GrubCenter syncs.
  */
-async function runImportInBackground(jobId: string, rows: Record<string, string>[], preIssues: string[]) {
+async function runImportInBackground(
+  jobId: string,
+  rows: Record<string, string>[],
+  locationPerfRows: Record<string, string>[],
+  preIssues: string[],
+) {
   try {
-    const result = await ingestRawOrders(rows);
+    const [result, locationPerfResult] = await Promise.all([
+      rows.length ? ingestRawOrders(rows) : Promise.resolve({ ingested: 0, issues: [] as string[] }),
+      locationPerfRows.length
+        ? ingestLocationPerformanceAverages(locationPerfRows)
+        : Promise.resolve({ ingested: 0, issues: [] as string[] }),
+    ]);
     invalidateDimensionCache();
     invalidateTabCache();
-    const issues = [...preIssues, ...result.issues];
+    const issues = [...preIssues, ...result.issues, ...locationPerfResult.issues];
     await prisma.syncLog.update({
       where: { id: jobId },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
-        recordsIngested: result.ingested,
+        recordsIngested: result.ingested + locationPerfResult.ingested,
         errorMessage: issues.length ? issues.slice(0, 20).join(" | ") : null,
       },
     });
@@ -106,6 +117,7 @@ export async function POST(req: NextRequest) {
 
   try {
     const rowsToIngest: Record<string, string>[] = [];
+    const locationPerfRows: Record<string, string>[] = [];
     const detected: { sheetName: string; reportType: ReportType; headers: string[] }[] = [];
     const preIssues: string[] = [];
 
@@ -130,9 +142,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (reportType === "location-performance-averages") {
-        preIssues.push(
-          `Sheet "${sheet.sheetName}": location-performance-averages import isn't supported yet (unknown real shape) — skipped ${sheet.rows.length} rows.`,
-        );
+        locationPerfRows.push(...sheet.rows);
         continue;
       }
 
@@ -144,14 +154,14 @@ export async function POST(req: NextRequest) {
     }
 
     const job = await prisma.syncLog.create({ data: { status: "RUNNING", source: "import" } });
-    runImportInBackground(job.id, rowsToIngest, preIssues).catch((err) => {
+    runImportInBackground(job.id, rowsToIngest, locationPerfRows, preIssues).catch((err) => {
       console.error("Background import failed:", err);
     });
 
     return NextResponse.json({
       status: "started",
       jobId: job.id,
-      rowCount: rowsToIngest.length,
+      rowCount: rowsToIngest.length + locationPerfRows.length,
       detected,
       issues: preIssues,
     });

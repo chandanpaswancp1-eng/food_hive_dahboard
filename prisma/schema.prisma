@@ -25,24 +25,26 @@ enum SyncStatus {
 }
 
 model Brand {
-  id            String         @id @default(cuid())
-  name          String         @unique
-  cuisine       String?
-  colorHex      String?
-  orders        Order[]
-  stockouts     StockoutEvent[]
-  createdAt     DateTime       @default(now())
+  id                    String                       @id @default(cuid())
+  name                  String                       @unique
+  cuisine               String?
+  colorHex              String?
+  orders                Order[]
+  stockouts             StockoutEvent[]
+  locationPerformances  LocationPerformanceAverage[]
+  createdAt             DateTime                     @default(now())
 }
 
 model Location {
-  id         String          @id @default(cuid())
-  name       String          @unique
-  vendorArea String?
-  city       String?
-  code       String?
-  orders     Order[]
-  stockouts  StockoutEvent[]
-  createdAt  DateTime        @default(now())
+  id                   String                       @id @default(cuid())
+  name                 String                       @unique
+  vendorArea           String?
+  city                 String?
+  code                 String?
+  orders               Order[]
+  stockouts            StockoutEvent[]
+  locationPerformances LocationPerformanceAverage[]
+  createdAt            DateTime                     @default(now())
 }
 
 model Channel {
@@ -178,6 +180,31 @@ model StockoutEvent {
   createdAt           DateTime  @default(now())
 
   @@index([markedUnavailableAt, brandId, locationId])
+}
+
+/// GrubCenter's own pre-aggregated stage-duration averages per brand+location,
+/// from its "Location Performance Averages" export. Order-details exports
+/// seen so far carry no milestone timestamps (only Received At), so this is
+/// currently the only source for these durations — not derivable from Order.
+/// One row per brand+location; each import overwrites with the latest snapshot.
+model LocationPerformanceAverage {
+  id                       String   @id @default(cuid())
+  brandId                  String
+  brand                    Brand    @relation(fields: [brandId], references: [id])
+  locationId               String
+  location                 Location @relation(fields: [locationId], references: [id])
+
+  durAccToStarted          Decimal? @db.Decimal(8, 2)
+  durStartedToPrep         Decimal? @db.Decimal(8, 2)
+  durPrepToSTD             Decimal? @db.Decimal(8, 2)
+  durSTDToDispatched       Decimal? @db.Decimal(8, 2)
+  durDispatchedToDelivered Decimal? @db.Decimal(8, 2)
+  durReceivedToDelivered   Decimal? @db.Decimal(8, 2)
+
+  updatedAt                DateTime @updatedAt
+  createdAt                DateTime @default(now())
+
+  @@unique([brandId, locationId])
 }
 
 model SyncLog {

@@ -92,6 +92,8 @@ export interface TabPayload {
   kpis: KpiValue[];
   charts: ChartSpec[];
   table: TableSpec;
+  /** Additional tables rendered below the primary one, for tabs with more than one natural breakdown. */
+  extraTables?: TableSpec[];
   scope: {
     orderCount: number;
   };

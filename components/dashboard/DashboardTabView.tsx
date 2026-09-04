@@ -33,6 +33,9 @@ export function DashboardTabView({ payload, loading, activeTab, importing, onImp
             ))}
           </div>
           <DataTable spec={payload.table} onRowClick={(row) => onDrill(filterFromTableRow(row))} />
+          {payload.extraTables?.map((spec) => (
+            <DataTable key={spec.title} spec={spec} onRowClick={(row) => onDrill(filterFromTableRow(row))} />
+          ))}
         </>
       )}
     </>
