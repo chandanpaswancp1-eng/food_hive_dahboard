@@ -6,6 +6,20 @@ export function fmtNumber(n: number): string {
   return n.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
+/**
+ * Abbreviated form (1.2K, 3.4M) for the big headline KPI cards — the exact
+ * comma-separated form (fmtCurrency/fmtNumber) is what tables should keep
+ * using, but a 7-8 digit number in a fixed-width KPI cell just gets
+ * ellipsis-truncated to "...". Leaves small numbers (<1000) untouched.
+ */
+export function fmtCurrencyCompact(n: number): string {
+  return `AED ${new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n)}`;
+}
+
+export function fmtNumberCompact(n: number): string {
+  return new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 }).format(n);
+}
+
 export function fmtPercent(n: number, digits = 1): string {
   return `${n.toFixed(digits)}%`;
 }

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtCurrency, fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtCurrency, fmtCurrencyCompact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -143,13 +143,13 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   return {
     kpis: [
-      { key: "netSales", label: "Net Sales", value: fmtCurrency(netSales) },
-      { key: "totalOrders", label: "Total Orders", value: fmtNumber(totalOrders) },
-      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrency(receiptTotal) },
-      { key: "totalDiscount", label: "Total Discount", value: fmtCurrency(totalDiscount) },
-      { key: "aov", label: "Avg Order Value", value: fmtCurrency(aov) },
-      { key: "runRate", label: "Avg Run Rate", value: `${fmtCurrency(avgRunRate)}/day` },
-      { key: "projectedRR", label: "Projected RR", value: `${fmtCurrency(projectedRR)}/yr` },
+      { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales) },
+      { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders) },
+      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal) },
+      { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount) },
+      { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov) },
+      { key: "runRate", label: "Avg Run Rate", value: `${fmtCurrencyCompact(avgRunRate)}/day` },
+      { key: "projectedRR", label: "Projected RR", value: `${fmtCurrencyCompact(projectedRR)}/yr` },
       { key: "topBrand", label: "Top Brand", value: topBrand },
     ],
     charts: [

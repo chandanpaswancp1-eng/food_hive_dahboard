@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc } from "./shared";
 
 export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
@@ -74,10 +74,10 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
 
   return {
     kpis: [
-      { key: "totalRatings", label: "Total Ratings", value: fmtNumber(total) },
+      { key: "totalRatings", label: "Total Ratings", value: fmtNumberCompact(total) },
       { key: "avgRating", label: "Average Rating", value: avgRating.toFixed(2) },
-      { key: "positive", label: "Positive Ratings", value: fmtNumber(positive), subtitle: fmtPercent(safeDiv(positive, total) * 100) },
-      { key: "negative", label: "Negative Ratings", value: fmtNumber(negative), subtitle: fmtPercent(safeDiv(negative, total) * 100), accent: true },
+      { key: "positive", label: "Positive Ratings", value: fmtNumberCompact(positive), subtitle: fmtPercent(safeDiv(positive, total) * 100) },
+      { key: "negative", label: "Negative Ratings", value: fmtNumberCompact(negative), subtitle: fmtPercent(safeDiv(negative, total) * 100), accent: true },
       { key: "polarity", label: "Polarity Rate", value: fmtPercent(polarity) },
     ],
     charts: [

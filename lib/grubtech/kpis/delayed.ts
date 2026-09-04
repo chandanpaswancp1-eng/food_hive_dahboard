@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtMinutes, fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtMinutes, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 
 export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
@@ -91,8 +91,8 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
 
   return {
     kpis: [
-      { key: "totalOrders", label: "Total Orders", value: fmtNumber(totalOrders) },
-      { key: "delayedOrders", label: "Delayed Orders (>10m)", value: fmtNumber(delayedOrders), subtitle: fmtPercent(delayRate), accent: true },
+      { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders) },
+      { key: "delayedOrders", label: "Delayed Orders (>10m)", value: fmtNumberCompact(delayedOrders), subtitle: fmtPercent(delayRate), accent: true },
       { key: "delayRate", label: "> 10 Minutes %", value: fmtPercent(delayRate) },
       { key: "avgPrep", label: "Avg Prep Time", value: fmtMinutes(avgPrep) },
       { key: "onTime", label: "On-Time Compliance", value: fmtPercent(onTimeCompliance) },

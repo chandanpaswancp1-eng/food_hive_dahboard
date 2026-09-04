@@ -1,5 +1,5 @@
 import type { TabPayload } from "@/lib/types";
-import { fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { dateKey, sortDesc, type LoadedStockout } from "./shared";
 
 export function buildStockoutsTab(events: LoadedStockout[], orderCount: number): TabPayload {
@@ -30,7 +30,7 @@ export function buildStockoutsTab(events: LoadedStockout[], orderCount: number):
 
   return {
     kpis: [
-      { key: "totalStockouts", label: "86 Items", value: fmtNumber(total), accent: true },
+      { key: "totalStockouts", label: "86 Items", value: fmtNumberCompact(total), accent: true },
       { key: "per1k", label: "Per 1K Orders", value: per1k.toFixed(1) },
       { key: "topBrand", label: "Brand with Most 86s", value: brandRows[0]?.[0] ?? "—" },
       { key: "topLocation", label: "Location with Most 86s", value: locationRows[0]?.[0] ?? "—" },
