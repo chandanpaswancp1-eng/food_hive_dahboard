@@ -38,6 +38,7 @@ const ALIASES = {
   sentToDispatchAt: ["sent_to_dispatch_at", "sentToDispatchAt"],
   dispatchedAt: ["dispatched_at", "dispatchedAt"],
   deliveredAt: ["delivered_at", "deliveredAt"],
+  currency: ["Currency", "currency"],
   netSales: ["Net Sales (AED)", "Net Sales", "Sales Amount", "net_sales", "netSales"],
   receiptTotal: [
     "Receipt Total (AED)",
@@ -114,6 +115,7 @@ const NormalizedOrderInput = z.object({
   vendorArea: z.string().optional(),
   channel: z.string().min(1),
   paymentMethod: z.string().optional(),
+  currency: z.string().optional(),
   receivedAt: z.string().min(1),
   hour: z.coerce.number().min(0).max(23).optional(),
   acceptedAt: z.string().optional(),
@@ -222,6 +224,19 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
   }
 
   const data = parsed.data;
+
+  // This dashboard is UAE-only (AED). Some brands operate Saudi Arabia (KSA)
+  // branches that report in SAR — reject rather than silently blend a
+  // different currency into "AED" totals. Checked two ways since a KSA row
+  // isn't guaranteed to have Currency populated: the field itself, and the
+  // brand-name suffix real KSA branches consistently carry.
+  if (data.currency && data.currency.trim().toUpperCase() !== "AED") {
+    return { ok: false, issues: [`currency: non-AED order excluded (${data.currency})`], raw };
+  }
+  if (/\bKSA\b/i.test(data.brand)) {
+    return { ok: false, issues: [`brand: KSA branch excluded (${data.brand})`], raw };
+  }
+
   const receivedDate = new Date(data.receivedAt);
   if (data.hour !== undefined) {
     // Date-only column + a separate real hour column — the timestamp's own
