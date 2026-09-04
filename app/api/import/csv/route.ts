@@ -124,8 +124,16 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     if (isDbConnectionError(error)) return dbErrorResponse(error);
-    if (error instanceof Error && error.message.includes("password-protected")) {
-      return NextResponse.json({ error: "encrypted_file", message: error.message }, { status: 422 });
+    if (
+      error instanceof Error &&
+      (error.message.includes("password-protected") || error.message.includes("password is incorrect"))
+    ) {
+      // officecrypto-tool throws "The password is incorrect" for a wrong (not missing) password —
+      // e.g. GrubCenter can issue a different password per export, not always EXCEL_IMPORT_PASSWORD's value.
+      const message = error.message.includes("password is incorrect")
+        ? `${file.name}'s password doesn't match EXCEL_IMPORT_PASSWORD. This file may use a different password than usual — check Railway/​.env.local and update it if needed.`
+        : error.message;
+      return NextResponse.json({ error: "encrypted_file", message }, { status: 422 });
     }
     throw error;
   }
