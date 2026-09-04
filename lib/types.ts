@@ -18,6 +18,24 @@ export const TAB_LABELS: Record<TabId, string> = {
   stockouts: "86 Items",
 };
 
+/** File types the backend can confidently recognize — the two real GrubCenter exports seen so far. */
+export type ReportTypeHint = "order-details" | "cancelled-orders";
+
+/**
+ * What each tab's own Import button expects. Tabs without a known,
+ * distinct source file (their data comes from order-details/cancelled-orders
+ * once those carry the right fields, or no source has been found yet) get
+ * no hint — the button falls back to auto-detecting from the file itself.
+ */
+export const TAB_IMPORT_CONFIG: Record<TabId, { label: string; hint?: ReportTypeHint }> = {
+  "order-details": { label: "Import Order Details", hint: "order-details" },
+  cancellations: { label: "Import Cancelled Orders", hint: "cancelled-orders" },
+  "prep-time": { label: "Import Data" },
+  ratings: { label: "Import Data" },
+  delayed: { label: "Import Data" },
+  stockouts: { label: "Import Data" },
+};
+
 export interface DashboardFilters {
   dateFrom?: string;
   dateTo?: string;

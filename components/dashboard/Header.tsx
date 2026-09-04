@@ -4,15 +4,13 @@ import type { SyncStatusPayload } from "@/lib/types";
 
 interface Props {
   sync: SyncStatusPayload | null;
-  onImport: (file: File) => void;
   onExport: () => void;
   onRefresh: () => void;
   refreshing: boolean;
-  importing: boolean;
   importMessage?: string | null;
 }
 
-export function Header({ sync, onImport, onExport, onRefresh, refreshing, importing, importMessage }: Props) {
+export function Header({ sync, onExport, onRefresh, refreshing, importMessage }: Props) {
   const dotClass =
     sync?.mode === "live" ? "live" : sync?.mode === "error" ? "error" : sync?.mode === "local" ? "local" : "";
   const label =
@@ -37,19 +35,6 @@ export function Header({ sync, onImport, onExport, onRefresh, refreshing, import
           {sync?.lastSyncedAt && <span>· {new Date(sync.lastSyncedAt).toLocaleTimeString()}</span>}
         </div>
         {importMessage && <span className="panel-caption">{importMessage}</span>}
-        <label className="btn btn-secondary">
-          {importing ? "Importing…" : "Import CSV / Excel"}
-          <input
-            type="file"
-            accept=".csv,.txt,.xlsx,.xls"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file && !importing) onImport(file);
-              e.target.value = "";
-            }}
-          />
-        </label>
         <button className="btn btn-secondary" onClick={onExport}>
           Export CSV
         </button>

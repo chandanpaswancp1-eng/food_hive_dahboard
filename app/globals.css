@@ -408,6 +408,12 @@ table.data-table {
   padding: var(--space-6) var(--space-8) var(--space-8);
 }
 
+.tab-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-4);
+}
+
 /* ---- modal ---- */
 
 .modal-backdrop {

@@ -6,7 +6,7 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { TabBar } from "@/components/dashboard/TabBar";
 import { DashboardTabView } from "@/components/dashboard/DashboardTabView";
 import { DrillThroughModal } from "@/components/dashboard/DrillThroughModal";
-import type { DashboardFilters, FilterOptions, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
+import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
 
 function filtersToParams(filters: DashboardFilters): string {
   const params = new URLSearchParams();
@@ -103,11 +103,12 @@ export default function DashboardPage() {
     setActiveTab(next);
   };
 
-  const handleImport = async (file: File) => {
+  const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
     setImporting(true);
     setImportMessage(null);
     const form = new FormData();
     form.append("file", file);
+    if (reportTypeHint) form.append("reportTypeHint", reportTypeHint);
 
     // Ingestion is DB-latency-bound and can take minutes for a large file —
     // the route starts it in the background and returns a jobId immediately
@@ -167,11 +168,9 @@ export default function DashboardPage() {
     <div>
       <Header
         sync={sync}
-        onImport={handleImport}
         onExport={handleExport}
         onRefresh={handleRefresh}
         refreshing={refreshing}
-        importing={importing}
         importMessage={importMessage}
       />
       <FilterBar
@@ -190,7 +189,14 @@ export default function DashboardPage() {
             <p>{dbError}</p>
           </div>
         ) : (
-          <DashboardTabView payload={payload} loading={loading} onDrill={setDrillScope} />
+          <DashboardTabView
+            payload={payload}
+            loading={loading}
+            activeTab={activeTab}
+            importing={importing}
+            onImport={handleImport}
+            onDrill={setDrillScope}
+          />
         )}
       </main>
       {drillScope && <DrillThroughModal filters={filters} scope={drillScope} onClose={() => setDrillScope(null)} />}

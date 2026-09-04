@@ -6,12 +6,13 @@ import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
 import { invalidateTabCache } from "@/lib/grubtech/kpis";
 import { prisma } from "@/lib/db";
+import type { ReportTypeHint } from "@/lib/types";
 
 export const runtime = "nodejs";
 
 type ReportType = "order-details" | "cancelled-orders" | "location-performance-averages" | "unknown";
 
-function detectReportType(filename: string, headers: string[]): ReportType {
+function sniffReportType(filename: string, headers: string[]): ReportType {
   const name = filename.toLowerCase();
   if (name.startsWith("order-details")) return "order-details";
   if (name.startsWith("cancelled-orders")) return "cancelled-orders";
@@ -21,6 +22,27 @@ function detectReportType(filename: string, headers: string[]): ReportType {
   if (has("Post Cancelled") || has("Cancellation Time")) return "cancelled-orders";
   if (has("Unique Order ID") || has("Order ID")) return "order-details";
   return "unknown";
+}
+
+/**
+ * Each tab's Import control now sends a hint for the file type it expects
+ * (order-details/cancelled-orders) instead of relying purely on filename/
+ * header sniffing. Still cross-checked against the sniffed type — if
+ * someone uploads an order-details file to the Cancellations tab's button,
+ * that's a real mismatch worth rejecting rather than silently mislabeling
+ * every row's status.
+ */
+function resolveReportType(
+  filename: string,
+  headers: string[],
+  hint?: ReportTypeHint,
+): { type: ReportType; mismatch: boolean } {
+  const sniffed = sniffReportType(filename, headers);
+  if (!hint) return { type: sniffed, mismatch: false };
+  if (sniffed !== "unknown" && sniffed !== hint) {
+    return { type: sniffed, mismatch: true };
+  }
+  return { type: hint, mismatch: false };
 }
 
 /**
@@ -68,9 +90,13 @@ async function runImportInBackground(jobId: string, rows: Record<string, string>
   }
 }
 
+const VALID_HINTS: ReportTypeHint[] = ["order-details", "cancelled-orders"];
+
 export async function POST(req: NextRequest) {
   const form = await req.formData();
   const file = form.get("file");
+  const hintRaw = form.get("reportTypeHint");
+  const hint = VALID_HINTS.includes(hintRaw as ReportTypeHint) ? (hintRaw as ReportTypeHint) : undefined;
 
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Missing file" }, { status: 400 });
@@ -79,36 +105,42 @@ export async function POST(req: NextRequest) {
   const isExcel = /\.xlsx?$/i.test(file.name);
 
   try {
-    let rowsToIngest: Record<string, string>[];
+    const rowsToIngest: Record<string, string>[] = [];
     const detected: { sheetName: string; reportType: ReportType; headers: string[] }[] = [];
     const preIssues: string[] = [];
 
-    if (!isExcel) {
-      const text = await file.text();
-      rowsToIngest = parseCsv(text);
+    let sheets: { sheetName: string; headers: string[]; rows: Record<string, string>[] }[];
+    if (isExcel) {
+      sheets = await parseWorkbook(Buffer.from(await file.arrayBuffer()), process.env.EXCEL_IMPORT_PASSWORD);
     } else {
-      const buffer = Buffer.from(await file.arrayBuffer());
-      const sheets = await parseWorkbook(buffer, process.env.EXCEL_IMPORT_PASSWORD);
+      const rows = parseCsv(await file.text());
+      sheets = [{ sheetName: file.name, headers: Object.keys(rows[0] ?? {}), rows }];
+    }
 
-      rowsToIngest = [];
-      for (const sheet of sheets) {
-        if (!sheet.rows.length) continue;
-        const reportType = detectReportType(file.name, sheet.headers);
-        detected.push({ sheetName: sheet.sheetName, reportType, headers: sheet.headers });
+    for (const sheet of sheets) {
+      if (!sheet.rows.length) continue;
+      const { type: reportType, mismatch } = resolveReportType(file.name, sheet.headers, hint);
+      detected.push({ sheetName: sheet.sheetName, reportType, headers: sheet.headers });
 
-        if (reportType === "location-performance-averages") {
-          preIssues.push(
-            `Sheet "${sheet.sheetName}": location-performance-averages import isn't supported yet (unknown real shape) — skipped ${sheet.rows.length} rows.`,
-          );
-          continue;
-        }
-
-        const rows =
-          reportType === "cancelled-orders"
-            ? withDefaultStatus(sheet.rows, "Cancelled")
-            : withDefaultStatus(sheet.rows, "Completed");
-        rowsToIngest.push(...rows);
+      if (mismatch) {
+        preIssues.push(
+          `Sheet "${sheet.sheetName}": expected a ${hint} file for this tab, but this looks like a ${reportType} file — skipped ${sheet.rows.length} rows. Upload the matching file type for this tab.`,
+        );
+        continue;
       }
+
+      if (reportType === "location-performance-averages") {
+        preIssues.push(
+          `Sheet "${sheet.sheetName}": location-performance-averages import isn't supported yet (unknown real shape) — skipped ${sheet.rows.length} rows.`,
+        );
+        continue;
+      }
+
+      const rows =
+        reportType === "cancelled-orders"
+          ? withDefaultStatus(sheet.rows, "Cancelled")
+          : withDefaultStatus(sheet.rows, "Completed");
+      rowsToIngest.push(...rows);
     }
 
     const job = await prisma.syncLog.create({ data: { status: "RUNNING", source: "import" } });
@@ -121,6 +153,7 @@ export async function POST(req: NextRequest) {
       jobId: job.id,
       rowCount: rowsToIngest.length,
       detected,
+      issues: preIssues,
     });
   } catch (error) {
     if (isDbConnectionError(error)) return dbErrorResponse(error);
