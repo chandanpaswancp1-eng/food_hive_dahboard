@@ -113,6 +113,9 @@ model Order {
   hour              Int?
   timeSlot          String?
   timeOfDay         String?
+  /// "YYYY-MM-DD" form of receivedAt's date, stored so daily charts can use
+  /// a plain groupBy instead of a raw date-truncation query.
+  receivedDateKey   String?
 
   // prep/delay
   estimatedPrepTime Decimal?  @db.Decimal(8, 2)
@@ -128,6 +131,7 @@ model Order {
 
   @@index([receivedAt, brandId, locationId, channelId, status])
   @@index([status])
+  @@index([receivedDateKey])
 }
 
 model OrderItem {

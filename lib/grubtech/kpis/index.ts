@@ -1,6 +1,7 @@
 import type { TabId, TabPayload, DashboardFilters } from "@/lib/types";
 import { buildOrderWhere, buildStockoutWhere } from "@/lib/filters";
-import { loadOrders, loadStockouts } from "./shared";
+import { loadStockouts } from "./shared";
+import { prisma } from "@/lib/db";
 import { buildSalesTab } from "./sales";
 import { buildCancellationsTab } from "./cancellations";
 import { buildPrepTimeTab } from "./prepTime";
@@ -10,26 +11,26 @@ import { buildStockoutsTab } from "./stockouts";
 
 export async function buildTabPayload(tab: TabId, filters: DashboardFilters): Promise<TabPayload> {
   if (tab === "stockouts") {
-    const [events, orders] = await Promise.all([
+    const [events, orderCount] = await Promise.all([
       loadStockouts(buildStockoutWhere(filters)),
-      loadOrders(buildOrderWhere(filters)),
+      prisma.order.count({ where: buildOrderWhere(filters) }),
     ]);
-    return buildStockoutsTab(events, orders.length);
+    return buildStockoutsTab(events, orderCount);
   }
 
-  const orders = await loadOrders(buildOrderWhere(filters));
+  const where = buildOrderWhere(filters);
 
   switch (tab) {
     case "order-details":
-      return buildSalesTab(orders);
+      return buildSalesTab(where);
     case "cancellations":
-      return buildCancellationsTab(orders);
+      return buildCancellationsTab(where);
     case "prep-time":
-      return buildPrepTimeTab(orders);
+      return buildPrepTimeTab(where);
     case "ratings":
-      return buildRatingsTab(orders);
+      return buildRatingsTab(where);
     case "delayed":
-      return buildDelayedTab(orders);
+      return buildDelayedTab(where);
     default:
       throw new Error(`Unknown tab: ${tab satisfies never}`);
   }

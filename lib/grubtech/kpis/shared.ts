@@ -1,22 +1,32 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 
-export async function loadOrders(where: Prisma.OrderWhereInput) {
-  return prisma.order.findMany({
-    where,
-    include: {
-      brand: true,
-      location: true,
-      channel: true,
-      cancellationReason: true,
-      items: true,
-      ratings: true,
-    },
-    orderBy: { receivedAt: "asc" },
-  });
+export interface DimensionMaps {
+  brands: Map<string, { name: string; cuisine: string | null }>;
+  locations: Map<string, { name: string }>;
+  channels: Map<string, { name: string }>;
+  reasons: Map<string, { description: string }>;
 }
 
-export type LoadedOrder = Awaited<ReturnType<typeof loadOrders>>[number];
+/**
+ * Small lookup tables (dozens to a couple hundred rows), loaded once per
+ * request so groupBy results (keyed by id) can be labeled without joining
+ * the full Order table.
+ */
+export async function loadDimensionMaps(): Promise<DimensionMaps> {
+  const [brands, locations, channels, reasons] = await Promise.all([
+    prisma.brand.findMany({ select: { id: true, name: true, cuisine: true } }),
+    prisma.location.findMany({ select: { id: true, name: true } }),
+    prisma.channel.findMany({ select: { id: true, name: true } }),
+    prisma.cancellationReason.findMany({ select: { id: true, description: true } }),
+  ]);
+  return {
+    brands: new Map(brands.map((b) => [b.id, { name: b.name, cuisine: b.cuisine }])),
+    locations: new Map(locations.map((l) => [l.id, { name: l.name }])),
+    channels: new Map(channels.map((c) => [c.id, { name: c.name }])),
+    reasons: new Map(reasons.map((r) => [r.id, { description: r.description }])),
+  };
+}
 
 export async function loadStockouts(where: Prisma.StockoutEventWhereInput) {
   return prisma.stockoutEvent.findMany({

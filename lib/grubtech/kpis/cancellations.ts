@@ -1,34 +1,59 @@
+import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
 import { fmtCurrency, fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
-import { num, sortDesc, type LoadedOrder } from "./shared";
+import { num, sortDesc, loadDimensionMaps } from "./shared";
 
-export function buildCancellationsTab(orders: LoadedOrder[]): TabPayload {
-  const cancelled = orders.filter((o) => o.status === "CANCELLED");
-  const cancelledAmount = cancelled.reduce((sum, o) => sum + num(o.netSales), 0);
-  const cancelledCount = cancelled.length;
-  const cancelRate = safeDiv(cancelledCount, orders.length) * 100;
+export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
+  const cancelledWhere: Prisma.OrderWhereInput = { ...where, status: "CANCELLED" };
+
+  const [totals, totalOrders, dims, byChannelGroups, byBrandGroups, byReasonGroups, postCancelledCount] =
+    await Promise.all([
+      prisma.order.aggregate({ where: cancelledWhere, _sum: { netSales: true }, _count: { _all: true } }),
+      prisma.order.count({ where }),
+      loadDimensionMaps(),
+      prisma.order.groupBy({ by: ["channelId"], where: cancelledWhere, _count: { _all: true } }),
+      prisma.order.groupBy({ by: ["brandId"], where: cancelledWhere, _sum: { netSales: true } }),
+      prisma.order.groupBy({
+        by: ["cancellationReasonId"],
+        where: cancelledWhere,
+        _count: { _all: true },
+        _sum: { netSales: true },
+      }),
+      prisma.order.count({ where: { ...cancelledWhere, isPostCancelled: true } }),
+    ]);
+
+  const cancelledAmount = num(totals._sum.netSales);
+  const cancelledCount = totals._count._all;
+  const cancelRate = safeDiv(cancelledCount, totalOrders) * 100;
   const cancelledAov = safeDiv(cancelledAmount, cancelledCount);
-  const postCancelled = cancelled.filter((o) => o.isPostCancelled);
-  const postCancelledPct = safeDiv(postCancelled.length, cancelledCount) * 100;
+  const postCancelledPct = safeDiv(postCancelledCount, cancelledCount) * 100;
 
-  const byChannel = new Map<string, number>();
-  for (const o of cancelled) byChannel.set(o.channel.name, (byChannel.get(o.channel.name) ?? 0) + 1);
-  const channelRows = sortDesc([...byChannel.entries()], ([, v]) => v);
-  const worstChannel = channelRows[0]?.[0] ?? "—";
+  const channelRows = sortDesc(
+    byChannelGroups.map((g) => ({
+      channel: dims.channels.get(g.channelId)?.name ?? "Unknown",
+      count: g._count._all,
+    })),
+    (v) => v.count,
+  );
+  const worstChannel = channelRows[0]?.channel ?? "—";
 
-  const byBrand = new Map<string, number>();
-  for (const o of cancelled) byBrand.set(o.brand.name, (byBrand.get(o.brand.name) ?? 0) + num(o.netSales));
-  const brandRows = sortDesc([...byBrand.entries()], ([, v]) => v);
+  const brandRows = sortDesc(
+    byBrandGroups.map((g) => ({
+      brand: dims.brands.get(g.brandId)?.name ?? "Unknown",
+      amount: num(g._sum.netSales),
+    })),
+    (v) => v.amount,
+  );
 
-  const byReason = new Map<string, { orders: number; amount: number }>();
-  for (const o of cancelled) {
-    const reason = o.cancellationReason?.description ?? "Unspecified";
-    const entry = byReason.get(reason) ?? { orders: 0, amount: 0 };
-    entry.orders += 1;
-    entry.amount += num(o.netSales);
-    byReason.set(reason, entry);
-  }
-  const reasonRows = sortDesc([...byReason.entries()], ([, v]) => v.orders);
+  const reasonRows = sortDesc(
+    byReasonGroups.map((g) => ({
+      reason: (g.cancellationReasonId && dims.reasons.get(g.cancellationReasonId)?.description) || "Unspecified",
+      orders: g._count._all,
+      amount: num(g._sum.netSales),
+    })),
+    (v) => v.orders,
+  );
 
   return {
     kpis: [
@@ -43,7 +68,7 @@ export function buildCancellationsTab(orders: LoadedOrder[]): TabPayload {
       {
         key: "postCancelled",
         label: "Post-Cancelled",
-        value: fmtNumber(postCancelled.length),
+        value: fmtNumber(postCancelledCount),
         subtitle: `${fmtPercent(postCancelledPct)} of cancellations`,
       },
       { key: "worstChannel", label: "Worst Channel", value: worstChannel },
@@ -53,27 +78,22 @@ export function buildCancellationsTab(orders: LoadedOrder[]): TabPayload {
         id: "cancelled-by-channel",
         title: "Cancelled Orders by Channel",
         type: "hbar",
-        labels: channelRows.map(([name]) => name),
-        datasets: [{ label: "Cancelled Orders", data: channelRows.map(([, v]) => v) }],
+        labels: channelRows.map((c) => c.channel),
+        datasets: [{ label: "Cancelled Orders", data: channelRows.map((c) => c.count) }],
       },
       {
         id: "cancelled-by-brand",
         title: "Cancelled Value by Brand",
         type: "bar",
-        labels: brandRows.map(([name]) => name),
-        datasets: [{ label: "Cancelled Value", data: brandRows.map(([, v]) => v) }],
+        labels: brandRows.map((b) => b.brand),
+        datasets: [{ label: "Cancelled Value", data: brandRows.map((b) => b.amount) }],
       },
       {
         id: "post-cancelled-split",
         title: "Post-Cancelled Split",
         type: "doughnut",
         labels: ["Post-Accepted", "Pre-Accepted"],
-        datasets: [
-          {
-            label: "Orders",
-            data: [postCancelled.length, cancelledCount - postCancelled.length],
-          },
-        ],
+        datasets: [{ label: "Orders", data: [postCancelledCount, cancelledCount - postCancelledCount] }],
       },
     ],
     table: {
@@ -84,13 +104,13 @@ export function buildCancellationsTab(orders: LoadedOrder[]): TabPayload {
         { key: "share", label: "Share", align: "right" },
         { key: "amount", label: "Lost Revenue", align: "right" },
       ],
-      rows: reasonRows.map(([reason, v]) => ({
-        reason,
-        orders: fmtNumber(v.orders),
-        share: fmtPercent(safeDiv(v.orders, cancelledCount) * 100),
-        amount: fmtCurrency(v.amount),
+      rows: reasonRows.map((r) => ({
+        reason: r.reason,
+        orders: fmtNumber(r.orders),
+        share: fmtPercent(safeDiv(r.orders, cancelledCount) * 100),
+        amount: fmtCurrency(r.amount),
       })),
     },
-    scope: { orderCount: orders.length },
+    scope: { orderCount: totalOrders },
   };
 }

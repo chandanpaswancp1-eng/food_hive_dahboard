@@ -1,50 +1,75 @@
+import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
 import { fmtCurrency, fmtNumber, fmtPercent, safeDiv } from "@/lib/format";
-import { dateKey, num, sortDesc, type LoadedOrder } from "./shared";
+import { num, sortDesc, loadDimensionMaps } from "./shared";
 
-export function buildSalesTab(orders: LoadedOrder[]): TabPayload {
-  const completed = orders.filter((o) => o.status === "COMPLETED");
+export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
+  const completedWhere: Prisma.OrderWhereInput = { ...where, status: "COMPLETED" };
 
-  const netSales = completed.reduce((sum, o) => sum + num(o.netSales), 0);
-  const receiptTotal = completed.reduce((sum, o) => sum + num(o.receiptTotal), 0);
-  const totalDiscount = completed.reduce((sum, o) => sum + num(o.discountAmount), 0);
-  const totalOrders = completed.length;
+  const [totals, dims, byBrandGroups, byChannelGroups, byDateGroups, scopeCount] = await Promise.all([
+    prisma.order.aggregate({
+      where: completedWhere,
+      _sum: { netSales: true, receiptTotal: true, discountAmount: true },
+      _count: { _all: true },
+    }),
+    loadDimensionMaps(),
+    prisma.order.groupBy({
+      by: ["brandId"],
+      where: completedWhere,
+      _sum: { netSales: true, discountAmount: true },
+      _count: { _all: true },
+    }),
+    prisma.order.groupBy({
+      by: ["channelId"],
+      where: completedWhere,
+      _sum: { netSales: true },
+      _count: { _all: true },
+    }),
+    prisma.order.groupBy({
+      by: ["receivedDateKey"],
+      where: completedWhere,
+      _sum: { netSales: true },
+      _count: { _all: true },
+    }),
+    prisma.order.count({ where }),
+  ]);
+
+  const netSales = num(totals._sum.netSales);
+  const receiptTotal = num(totals._sum.receiptTotal);
+  const totalDiscount = num(totals._sum.discountAmount);
+  const totalOrders = totals._count._all;
   const aov = safeDiv(netSales, totalOrders);
 
-  const days = new Set(completed.map((o) => dateKey(o.receivedAt))).size || 1;
+  const days = byDateGroups.length || 1;
   const avgRunRate = netSales / days;
   const projectedRR = avgRunRate * 365;
 
-  const byBrand = new Map<string, { netSales: number; orders: number; cuisine: string; discount: number }>();
-  for (const o of completed) {
-    const key = o.brand.name;
-    const entry = byBrand.get(key) ?? { netSales: 0, orders: 0, cuisine: o.brand.cuisine ?? "—", discount: 0 };
-    entry.netSales += num(o.netSales);
-    entry.orders += 1;
-    entry.discount += num(o.discountAmount);
-    byBrand.set(key, entry);
-  }
-  const brandRows = sortDesc([...byBrand.entries()], ([, v]) => v.netSales);
-  const topBrand = brandRows[0]?.[0] ?? "—";
+  const brandRows = sortDesc(
+    byBrandGroups.map((g) => ({
+      brand: dims.brands.get(g.brandId)?.name ?? "Unknown",
+      cuisine: dims.brands.get(g.brandId)?.cuisine ?? "—",
+      netSales: num(g._sum.netSales),
+      orders: g._count._all,
+      discount: num(g._sum.discountAmount),
+    })),
+    (v) => v.netSales,
+  );
+  const topBrand = brandRows[0]?.brand ?? "—";
 
-  const byChannel = new Map<string, { netSales: number; orders: number }>();
-  for (const o of completed) {
-    const entry = byChannel.get(o.channel.name) ?? { netSales: 0, orders: 0 };
-    entry.netSales += num(o.netSales);
-    entry.orders += 1;
-    byChannel.set(o.channel.name, entry);
-  }
-  const channelRows = sortDesc([...byChannel.entries()], ([, v]) => v.netSales);
+  const channelRows = sortDesc(
+    byChannelGroups.map((g) => ({
+      channel: dims.channels.get(g.channelId)?.name ?? "Unknown",
+      netSales: num(g._sum.netSales),
+      orders: g._count._all,
+    })),
+    (v) => v.netSales,
+  );
 
-  const byDate = new Map<string, { netSales: number; orders: number }>();
-  for (const o of completed) {
-    const key = dateKey(o.receivedAt);
-    const entry = byDate.get(key) ?? { netSales: 0, orders: 0 };
-    entry.netSales += num(o.netSales);
-    entry.orders += 1;
-    byDate.set(key, entry);
-  }
-  const dateRows = [...byDate.entries()].sort(([a], [b]) => (a < b ? -1 : 1));
+  const dateRows = byDateGroups
+    .filter((g): g is typeof g & { receivedDateKey: string } => Boolean(g.receivedDateKey))
+    .map((g) => ({ date: g.receivedDateKey, netSales: num(g._sum.netSales), orders: g._count._all }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return {
     kpis: [
@@ -63,25 +88,25 @@ export function buildSalesTab(orders: LoadedOrder[]): TabPayload {
         title: "Net Sales & Total Orders by Date",
         caption: "Bars: net sales · Line: orders",
         type: "combo",
-        labels: dateRows.map(([d]) => d),
+        labels: dateRows.map((d) => d.date),
         datasets: [
-          { label: "Net Sales", data: dateRows.map(([, v]) => v.netSales), kind: "bar", yAxisId: "y" },
-          { label: "Orders", data: dateRows.map(([, v]) => v.orders), kind: "line", yAxisId: "y1" },
+          { label: "Net Sales", data: dateRows.map((d) => d.netSales), kind: "bar", yAxisId: "y" },
+          { label: "Orders", data: dateRows.map((d) => d.orders), kind: "line", yAxisId: "y1" },
         ],
       },
       {
         id: "sales-by-channel",
         title: "Net Sales by Channel",
         type: "hbar",
-        labels: channelRows.map(([name]) => name),
-        datasets: [{ label: "Net Sales", data: channelRows.map(([, v]) => v.netSales) }],
+        labels: channelRows.map((c) => c.channel),
+        datasets: [{ label: "Net Sales", data: channelRows.map((c) => c.netSales) }],
       },
       {
         id: "sales-by-brand",
         title: "Net Sales by Brand",
         type: "bar",
-        labels: brandRows.map(([name]) => name),
-        datasets: [{ label: "Net Sales", data: brandRows.map(([, v]) => v.netSales) }],
+        labels: brandRows.map((b) => b.brand),
+        datasets: [{ label: "Net Sales", data: brandRows.map((b) => b.netSales) }],
       },
     ],
     table: {
@@ -95,16 +120,16 @@ export function buildSalesTab(orders: LoadedOrder[]): TabPayload {
         { key: "discount", label: "Discount", align: "right" },
         { key: "discountPct", label: "Disc %", align: "right" },
       ],
-      rows: brandRows.map(([brand, v]) => ({
-        brand,
-        cuisine: v.cuisine,
-        netSales: fmtCurrency(v.netSales),
-        orders: fmtNumber(v.orders),
-        aov: fmtCurrency(safeDiv(v.netSales, v.orders)),
-        discount: fmtCurrency(v.discount),
-        discountPct: fmtPercent(safeDiv(v.discount, v.netSales) * 100),
+      rows: brandRows.map((b) => ({
+        brand: b.brand,
+        cuisine: b.cuisine,
+        netSales: fmtCurrency(b.netSales),
+        orders: fmtNumber(b.orders),
+        aov: fmtCurrency(safeDiv(b.netSales, b.orders)),
+        discount: fmtCurrency(b.discount),
+        discountPct: fmtPercent(safeDiv(b.discount, b.netSales) * 100),
       })),
     },
-    scope: { orderCount: orders.length },
+    scope: { orderCount: scopeCount },
   };
 }

@@ -1,52 +1,72 @@
+import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
 import { fmtMinutes, fmtNumber } from "@/lib/format";
-import { num, sortDesc, type LoadedOrder } from "./shared";
+import { num, sortDesc, loadDimensionMaps } from "./shared";
 
-const STAGES = [
-  ["durAccToStarted", "Acc → Started"],
-  ["durStartedToPrep", "Started → Prepared"],
-  ["durPrepToSTD", "Prepared → STD"],
-  ["durSTDToDispatched", "STD → Dispatched"],
-  ["durReceivingToDispatched", "Receiving → Dispatched"],
-  ["durReceivedToDelivered", "Received → Delivered"],
+const STAGE_FIELDS = [
+  "durAccToStarted",
+  "durStartedToPrep",
+  "durPrepToSTD",
+  "durSTDToDispatched",
+  "durReceivingToDispatched",
+  "durReceivedToDelivered",
 ] as const;
 
-function avgOf(orders: LoadedOrder[], key: (typeof STAGES)[number][0]): number | null {
-  const values = orders.map((o) => num(o[key])).filter((v) => v > 0);
-  if (!values.length) return null;
-  return values.reduce((a, b) => a + b, 0) / values.length;
-}
+const STAGE_LABELS: Record<(typeof STAGE_FIELDS)[number], string> = {
+  durAccToStarted: "Acc → Started",
+  durStartedToPrep: "Started → Prepared",
+  durPrepToSTD: "Prepared → STD",
+  durSTDToDispatched: "STD → Dispatched",
+  durReceivingToDispatched: "Receiving → Dispatched",
+  durReceivedToDelivered: "Received → Delivered",
+};
 
-export function buildPrepTimeTab(orders: LoadedOrder[]): TabPayload {
-  const completed = orders.filter((o) => o.status === "COMPLETED");
+const AVG_ALL_STAGES = Object.fromEntries(STAGE_FIELDS.map((f) => [f, true])) as Record<
+  (typeof STAGE_FIELDS)[number],
+  true
+>;
 
-  const stageAverages = STAGES.map(([key, label]) => ({ key, label, avg: avgOf(completed, key) }));
+export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
+  const completedWhere: Prisma.OrderWhereInput = { ...where, status: "COMPLETED" };
 
-  const byBrand = new Map<string, LoadedOrder[]>();
-  for (const o of completed) {
-    const arr = byBrand.get(o.brand.name) ?? [];
-    arr.push(o);
-    byBrand.set(o.brand.name, arr);
-  }
+  const [overall, dims, byBrandGroups, scopeCount] = await Promise.all([
+    prisma.order.aggregate({ where: completedWhere, _avg: AVG_ALL_STAGES }),
+    loadDimensionMaps(),
+    prisma.order.groupBy({
+      by: ["brandId"],
+      where: completedWhere,
+      _avg: AVG_ALL_STAGES,
+      _count: { _all: true },
+    }),
+    prisma.order.count({ where }),
+  ]);
 
-  const brandCycle = [...byBrand.entries()].map(([brand, brandOrders]) => ({
-    brand,
-    orders: brandOrders.length,
-    cycle: avgOf(brandOrders, "durReceivedToDelivered") ?? 0,
-    stages: STAGES.map(([key, label]) => ({ label, avg: avgOf(brandOrders, key) })),
+  const brandRows = byBrandGroups.map((g) => ({
+    brand: dims.brands.get(g.brandId)?.name ?? "Unknown",
+    orders: g._count._all,
+    cycle: num(g._avg.durReceivedToDelivered),
+    stages: STAGE_FIELDS.map((field) => ({ label: STAGE_LABELS[field], avg: g._avg[field] !== null ? num(g._avg[field]) : null })),
   }));
 
-  const rankedByCycle = sortDesc(brandCycle, (b) => -b.cycle); // fastest first (lowest cycle)
+  const rankedByCycle = sortDesc(
+    brandRows.filter((b) => b.cycle > 0),
+    (b) => -b.cycle,
+  );
   const fastest = rankedByCycle[0];
   const slowest = rankedByCycle[rankedByCycle.length - 1];
 
-  const rankedByDispatch = sortDesc(brandCycle, (b) =>
-    b.stages.find((s) => s.label === "Receiving → Dispatched")?.avg ?? 0,
+  const rankedByDispatch = sortDesc(brandRows, (b) =>
+    b.stages.find((s) => s.label === STAGE_LABELS.durReceivingToDispatched)?.avg ?? 0,
   );
 
   return {
     kpis: [
-      ...stageAverages.map((s) => ({ key: s.key, label: s.label, value: fmtMinutes(s.avg) })),
+      ...STAGE_FIELDS.map((field) => ({
+        key: field,
+        label: STAGE_LABELS[field],
+        value: fmtMinutes(overall._avg[field] !== null ? num(overall._avg[field]) : null),
+      })),
       ...(fastest
         ? [{ key: "fastestOutlet", label: "Fastest Brand", value: fastest.brand, subtitle: fmtMinutes(fastest.cycle) }]
         : []),
@@ -71,7 +91,7 @@ export function buildPrepTimeTab(orders: LoadedOrder[]): TabPayload {
         datasets: [
           {
             label: "Minutes",
-            data: rankedByDispatch.map((b) => b.stages.find((s) => s.label === "Receiving → Dispatched")?.avg ?? 0),
+            data: rankedByDispatch.map((b) => b.stages.find((s) => s.label === STAGE_LABELS.durReceivingToDispatched)?.avg ?? 0),
           },
         ],
       },
@@ -79,8 +99,8 @@ export function buildPrepTimeTab(orders: LoadedOrder[]): TabPayload {
         id: "cycle-time-by-brand",
         title: "Full Cycle Time by Brand",
         type: "bar",
-        labels: brandCycle.map((b) => b.brand),
-        datasets: [{ label: "Minutes", data: brandCycle.map((b) => b.cycle) }],
+        labels: brandRows.map((b) => b.brand),
+        datasets: [{ label: "Minutes", data: brandRows.map((b) => b.cycle) }],
       },
     ],
     table: {
@@ -88,16 +108,16 @@ export function buildPrepTimeTab(orders: LoadedOrder[]): TabPayload {
       columns: [
         { key: "brand", label: "Brand" },
         { key: "orders", label: "Orders", align: "right" },
-        ...STAGES.map(([, label]) => ({ key: label, label, align: "right" as const })),
+        ...STAGE_FIELDS.map((field) => ({ key: STAGE_LABELS[field], label: STAGE_LABELS[field], align: "right" as const })),
         { key: "cycle", label: "Received → Delivered", align: "right" as const },
       ],
-      rows: brandCycle.map((b) => ({
+      rows: brandRows.map((b) => ({
         brand: b.brand,
         orders: fmtNumber(b.orders),
         ...Object.fromEntries(b.stages.map((s) => [s.label, fmtMinutes(s.avg)])),
         cycle: fmtMinutes(b.cycle),
       })),
     },
-    scope: { orderCount: orders.length },
+    scope: { orderCount: scopeCount },
   };
 }
