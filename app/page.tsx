@@ -28,7 +28,7 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [drillOpen, setDrillOpen] = useState(false);
+  const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   // Network to the DB has been intermittent (a real flaky-connection window,
   // not a one-off) — a fetch landing exactly during an outage would leave
@@ -143,10 +143,10 @@ export default function DashboardPage() {
             <p>{dbError}</p>
           </div>
         ) : (
-          <DashboardTabView payload={payload} loading={loading} onRowClick={() => setDrillOpen(true)} />
+          <DashboardTabView payload={payload} loading={loading} onDrill={setDrillScope} />
         )}
       </main>
-      {drillOpen && <DrillThroughModal filters={filters} onClose={() => setDrillOpen(false)} />}
+      {drillScope && <DrillThroughModal filters={filters} scope={drillScope} onClose={() => setDrillScope(null)} />}
     </div>
   );
 }

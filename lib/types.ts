@@ -45,6 +45,8 @@ export interface ChartDataset {
   yAxisId?: "y" | "y1";
 }
 
+export type DrillDimension = "brand" | "location" | "channel" | "cuisine" | "date";
+
 export interface ChartSpec {
   id: string;
   title: string;
@@ -52,6 +54,8 @@ export interface ChartSpec {
   type: ChartType;
   labels: string[];
   datasets: ChartDataset[];
+  /** When set, each label is a value for this filter dimension — clicking a slice/bar drills through scoped to it. */
+  dimension?: DrillDimension;
 }
 
 export interface TableColumn {

@@ -2,7 +2,8 @@
 
 import "@/lib/chartSetup";
 import { Bar, Line, Doughnut, Chart } from "react-chartjs-2";
-import type { ChartSpec } from "@/lib/types";
+import type { ChartSpec, DashboardFilters } from "@/lib/types";
+import { dimensionFilter } from "@/lib/drillthrough";
 
 const INK = "#201e1d";
 const ACCENT = "#ec3013";
@@ -19,13 +20,27 @@ function formatNumber(value: number): string {
   return Number.isFinite(value) ? value.toLocaleString("en-US", { maximumFractionDigits: 1 }) : String(value);
 }
 
-function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x") {
+function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x", onIndexClick?: (index: number) => void) {
   const valueTicks = { callback: (value: unknown) => formatNumber(Number(value)) };
 
   return {
     responsive: true,
     maintainAspectRatio: false,
     indexAxis,
+    onClick: onIndexClick
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (_event: any, elements: { index: number }[]) => {
+          if (elements.length > 0) onIndexClick(elements[0].index);
+        }
+      : undefined,
+    onHover: onIndexClick
+      ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (event: any, elements: unknown[]) => {
+          if (event.native?.target) {
+            event.native.target.style.cursor = elements.length ? "pointer" : "default";
+          }
+        }
+      : undefined,
     plugins: {
       legend: { display: true, position: "bottom" as const },
       tooltip: {
@@ -60,7 +75,12 @@ function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x") {
   };
 }
 
-export function ChartPanel({ spec }: { spec: ChartSpec }) {
+interface Props {
+  spec: ChartSpec;
+  onSlice?: (filter: Partial<DashboardFilters>) => void;
+}
+
+export function ChartPanel({ spec, onSlice }: Props) {
   const data = {
     labels: spec.labels,
     datasets: spec.datasets.map((ds, i) => ({
@@ -76,6 +96,14 @@ export function ChartPanel({ spec }: { spec: ChartSpec }) {
       type: spec.type === "combo" ? ds.kind ?? "bar" : undefined,
     })),
   };
+
+  const handleIndexClick =
+    spec.dimension && onSlice
+      ? (index: number) => {
+          const label = spec.labels[index];
+          if (label) onSlice(dimensionFilter(spec.dimension!, label));
+        }
+      : undefined;
 
   let body: React.ReactNode;
 
@@ -102,17 +130,17 @@ export function ChartPanel({ spec }: { spec: ChartSpec }) {
     );
   } else if (spec.type === "hbar") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body = <Bar data={data as any} options={baseOptions(false, "y")} />;
+    body = <Bar data={data as any} options={baseOptions(false, "y", handleIndexClick)} />;
   } else if (spec.type === "line") {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body = <Line data={data as any} options={baseOptions(false)} />;
+    body = <Line data={data as any} options={baseOptions(false, "x", handleIndexClick)} />;
   } else if (spec.type === "combo") {
     const hasSecondAxis = spec.datasets.some((d) => d.yAxisId === "y1");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body = <Chart type="bar" data={data as any} options={baseOptions(hasSecondAxis)} />;
+    body = <Chart type="bar" data={data as any} options={baseOptions(hasSecondAxis, "x", handleIndexClick)} />;
   } else {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    body = <Bar data={data as any} options={baseOptions(false)} />;
+    body = <Bar data={data as any} options={baseOptions(false, "x", handleIndexClick)} />;
   }
 
   return (

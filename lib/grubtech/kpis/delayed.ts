@@ -103,6 +103,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
         id: "completed-vs-delayed-by-brand",
         title: "Completed vs Delayed (>10min) by Brand",
         type: "bar",
+        dimension: "brand",
         labels: brandRows.map((b) => b.brand),
         datasets: [
           { label: "Completed", data: brandRows.map((b) => b.total - b.delayed), kind: "bar" },
@@ -113,6 +114,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
         id: "completed-vs-delayed-by-location",
         title: "Completed vs Delayed (>10min) by Branch",
         type: "bar",
+        dimension: "location",
         labels: locationRows.map((l) => l.location),
         datasets: [
           { label: "Completed", data: locationRows.map((l) => l.total - l.delayed), kind: "bar" },
@@ -123,6 +125,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
         id: "prep-time-vs-estimated",
         title: "Vendor Preparation Time vs Estimated",
         type: "bar",
+        dimension: "brand",
         labels: prepRows.map((p) => p.brand),
         datasets: [
           { label: "Estimated", data: prepRows.map((p) => p.estimated), kind: "bar" },
