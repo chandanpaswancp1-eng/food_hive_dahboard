@@ -16,7 +16,12 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
       where: ratingWhere,
       select: {
         value: true,
-        order: { select: { brand: { select: { name: true } }, location: { select: { name: true } } } },
+        order: {
+          select: {
+            brand: { select: { name: true, cuisine: true } },
+            location: { select: { name: true } },
+          },
+        },
       },
     }),
     prisma.order.count({ where }),
@@ -33,9 +38,11 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
 
   const byLocation = new Map<string, { sum: number; count: number }>();
   const byBrand = new Map<string, { sum: number; count: number }>();
+  const byCuisine = new Map<string, { sum: number; count: number }>();
   for (const r of ratingRows) {
     const loc = r.order.location.name;
     const brand = r.order.brand.name;
+    const cuisine = r.order.brand.cuisine ?? "—";
     const locEntry = byLocation.get(loc) ?? { sum: 0, count: 0 };
     locEntry.sum += r.value;
     locEntry.count += 1;
@@ -44,6 +51,10 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
     brandEntry.sum += r.value;
     brandEntry.count += 1;
     byBrand.set(brand, brandEntry);
+    const cuisineEntry = byCuisine.get(cuisine) ?? { sum: 0, count: 0 };
+    cuisineEntry.sum += r.value;
+    cuisineEntry.count += 1;
+    byCuisine.set(cuisine, cuisineEntry);
   }
 
   const locationRows = sortDesc(
@@ -54,6 +65,12 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
     [...byBrand.entries()].map(([brand, v]) => ({ brand, avg: safeDiv(v.sum, v.count), count: v.count })),
     (v) => v.avg,
   );
+  const cuisineRows = sortDesc(
+    [...byCuisine.entries()].map(([cuisine, v]) => ({ cuisine, avg: safeDiv(v.sum, v.count) })),
+    (v) => v.avg,
+  );
+  const bestBrands = brandRows.slice(0, 5);
+  const worstBrands = [...brandRows].reverse().slice(0, 5);
 
   return {
     kpis: [
@@ -72,11 +89,32 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
         datasets: [{ label: "Ratings", data: distArr }],
       },
       {
-        id: "ratings-by-brand",
-        title: "Average Rating by Brand",
+        id: "ratings-by-cuisine",
+        title: "Average Rating by Cuisine Cluster",
+        type: "bar",
+        labels: cuisineRows.map((c) => c.cuisine),
+        datasets: [{ label: "Avg Rating", data: cuisineRows.map((c) => Number(c.avg.toFixed(2))) }],
+      },
+      {
+        id: "ratings-by-location",
+        title: "Ratings by Location",
         type: "hbar",
-        labels: brandRows.map((b) => b.brand),
-        datasets: [{ label: "Avg Rating", data: brandRows.map((b) => Number(b.avg.toFixed(2))) }],
+        labels: locationRows.map((l) => l.location),
+        datasets: [{ label: "Avg Rating", data: locationRows.map((l) => Number(l.avg.toFixed(2))) }],
+      },
+      {
+        id: "best-brands-by-rating",
+        title: "Best Brands by Rating",
+        type: "hbar",
+        labels: bestBrands.map((b) => b.brand),
+        datasets: [{ label: "Avg Rating", data: bestBrands.map((b) => Number(b.avg.toFixed(2))) }],
+      },
+      {
+        id: "worst-brands-by-rating",
+        title: "Worst Brands by Rating",
+        type: "hbar",
+        labels: worstBrands.map((b) => b.brand),
+        datasets: [{ label: "Avg Rating", data: worstBrands.map((b) => Number(b.avg.toFixed(2))) }],
       },
     ],
     table: {

@@ -56,9 +56,13 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
   const fastest = rankedByCycle[0];
   const slowest = rankedByCycle[rankedByCycle.length - 1];
 
-  const rankedByDispatch = sortDesc(brandRows, (b) =>
-    b.stages.find((s) => s.label === STAGE_LABELS.durReceivingToDispatched)?.avg ?? 0,
-  );
+  const dispatchValue = (b: (typeof brandRows)[number]) =>
+    b.stages.find((s) => s.label === STAGE_LABELS.durReceivingToDispatched)?.avg;
+
+  const withDispatchAvg = brandRows.filter((b) => (dispatchValue(b) ?? 0) > 0);
+  const rankedByDispatchDesc = sortDesc(withDispatchAvg, (b) => dispatchValue(b) ?? 0);
+  const worstDispatch = rankedByDispatchDesc.slice(0, 4);
+  const bestDispatch = [...rankedByDispatchDesc].reverse().slice(0, 4);
 
   return {
     kpis: [
@@ -84,16 +88,18 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
     ],
     charts: [
       {
-        id: "receiving-to-dispatched-by-brand",
-        title: "Receiving → Dispatched by Brand (slowest first)",
+        id: "best-receiving-to-dispatched",
+        title: "Best Receiving → Dispatched",
         type: "hbar",
-        labels: rankedByDispatch.map((b) => b.brand),
-        datasets: [
-          {
-            label: "Minutes",
-            data: rankedByDispatch.map((b) => b.stages.find((s) => s.label === STAGE_LABELS.durReceivingToDispatched)?.avg ?? 0),
-          },
-        ],
+        labels: bestDispatch.map((b) => b.brand),
+        datasets: [{ label: "Minutes", data: bestDispatch.map((b) => dispatchValue(b) ?? 0) }],
+      },
+      {
+        id: "worst-receiving-to-dispatched",
+        title: "Worst Receiving → Dispatched",
+        type: "hbar",
+        labels: worstDispatch.map((b) => b.brand),
+        datasets: [{ label: "Minutes", data: worstDispatch.map((b) => dispatchValue(b) ?? 0) }],
       },
       {
         id: "cycle-time-by-brand",

@@ -7,21 +7,32 @@ import { num, sortDesc, loadDimensionMaps } from "./shared";
 export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
   const cancelledWhere: Prisma.OrderWhereInput = { ...where, status: "CANCELLED" };
 
-  const [totals, totalOrders, dims, byChannelGroups, byBrandGroups, byReasonGroups, postCancelledCount] =
-    await Promise.all([
-      prisma.order.aggregate({ where: cancelledWhere, _sum: { netSales: true }, _count: { _all: true } }),
-      prisma.order.count({ where }),
-      loadDimensionMaps(),
-      prisma.order.groupBy({ by: ["channelId"], where: cancelledWhere, _count: { _all: true } }),
-      prisma.order.groupBy({ by: ["brandId"], where: cancelledWhere, _sum: { netSales: true } }),
-      prisma.order.groupBy({
-        by: ["cancellationReasonId"],
-        where: cancelledWhere,
-        _count: { _all: true },
-        _sum: { netSales: true },
-      }),
-      prisma.order.count({ where: { ...cancelledWhere, isPostCancelled: true } }),
-    ]);
+  const [
+    totals,
+    totalOrders,
+    dims,
+    byChannelGroups,
+    byBrandGroups,
+    byLocationGroups,
+    byReasonGroups,
+    byDateGroups,
+    postCancelledCount,
+  ] = await Promise.all([
+    prisma.order.aggregate({ where: cancelledWhere, _sum: { netSales: true }, _count: { _all: true } }),
+    prisma.order.count({ where }),
+    loadDimensionMaps(),
+    prisma.order.groupBy({ by: ["channelId"], where: cancelledWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["brandId"], where: cancelledWhere, _sum: { netSales: true } }),
+    prisma.order.groupBy({ by: ["locationId"], where: cancelledWhere, _count: { _all: true } }),
+    prisma.order.groupBy({
+      by: ["cancellationReasonId"],
+      where: cancelledWhere,
+      _count: { _all: true },
+      _sum: { netSales: true },
+    }),
+    prisma.order.groupBy({ by: ["receivedDateKey"], where: cancelledWhere, _count: { _all: true } }),
+    prisma.order.count({ where: { ...cancelledWhere, isPostCancelled: true } }),
+  ]);
 
   const cancelledAmount = num(totals._sum.netSales);
   const cancelledCount = totals._count._all;
@@ -54,6 +65,19 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
     })),
     (v) => v.orders,
   );
+
+  const locationRows = sortDesc(
+    byLocationGroups.map((g) => ({
+      location: dims.locations.get(g.locationId)?.name ?? "Unknown",
+      count: g._count._all,
+    })),
+    (v) => v.count,
+  );
+
+  const trendRows = byDateGroups
+    .filter((g): g is typeof g & { receivedDateKey: string } => Boolean(g.receivedDateKey))
+    .map((g) => ({ date: g.receivedDateKey, count: g._count._all }))
+    .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return {
     kpis: [
@@ -94,6 +118,20 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         type: "doughnut",
         labels: ["Post-Accepted", "Pre-Accepted"],
         datasets: [{ label: "Orders", data: [postCancelledCount, cancelledCount - postCancelledCount] }],
+      },
+      {
+        id: "cancelled-by-location",
+        title: "Cancelled Orders by Location",
+        type: "hbar",
+        labels: locationRows.map((l) => l.location),
+        datasets: [{ label: "Cancelled Orders", data: locationRows.map((l) => l.count) }],
+      },
+      {
+        id: "cancelled-trend",
+        title: "Cancelled Orders Trend",
+        type: "line",
+        labels: trendRows.map((t) => t.date),
+        datasets: [{ label: "Cancelled Orders", data: trendRows.map((t) => t.count), kind: "line" }],
       },
     ],
     table: {

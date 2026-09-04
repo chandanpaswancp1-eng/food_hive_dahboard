@@ -8,21 +8,38 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
   const completedWhere: Prisma.OrderWhereInput = { ...where, status: "COMPLETED" };
   const delayedWhere: Prisma.OrderWhereInput = { ...completedWhere, isDelayed: true };
 
-  const [totalByBrandLoc, delayedByBrandLoc, totalByBrand, delayedByBrand, overall, dims, scopeCount] =
-    await Promise.all([
-      prisma.order.groupBy({
-        by: ["brandId", "locationId"],
-        where: completedWhere,
-        _count: { _all: true },
-        _avg: { actualPrepTime: true },
-      }),
-      prisma.order.groupBy({ by: ["brandId", "locationId"], where: delayedWhere, _count: { _all: true } }),
-      prisma.order.groupBy({ by: ["brandId"], where: completedWhere, _count: { _all: true } }),
-      prisma.order.groupBy({ by: ["brandId"], where: delayedWhere, _count: { _all: true } }),
-      prisma.order.aggregate({ where: completedWhere, _count: { _all: true }, _avg: { actualPrepTime: true } }),
-      loadDimensionMaps(),
-      prisma.order.count({ where }),
-    ]);
+  const [
+    totalByBrandLoc,
+    delayedByBrandLoc,
+    totalByBrand,
+    delayedByBrand,
+    totalByLocation,
+    delayedByLocation,
+    prepByBrand,
+    overall,
+    dims,
+    scopeCount,
+  ] = await Promise.all([
+    prisma.order.groupBy({
+      by: ["brandId", "locationId"],
+      where: completedWhere,
+      _count: { _all: true },
+      _avg: { actualPrepTime: true },
+    }),
+    prisma.order.groupBy({ by: ["brandId", "locationId"], where: delayedWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["brandId"], where: completedWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["brandId"], where: delayedWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["locationId"], where: completedWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["locationId"], where: delayedWhere, _count: { _all: true } }),
+    prisma.order.groupBy({
+      by: ["brandId"],
+      where: completedWhere,
+      _avg: { estimatedPrepTime: true, actualPrepTime: true },
+    }),
+    prisma.order.aggregate({ where: completedWhere, _count: { _all: true }, _avg: { actualPrepTime: true } }),
+    loadDimensionMaps(),
+    prisma.order.count({ where }),
+  ]);
 
   const delayedByBrandLocMap = new Map(delayedByBrandLoc.map((g) => [`${g.brandId}__${g.locationId}`, g._count._all]));
   const delayedByBrandMap = new Map(delayedByBrand.map((g) => [g.brandId, g._count._all]));
@@ -59,6 +76,19 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
   }));
   const worstBrand = sortDesc(brandRows, (b) => safeDiv(b.delayed, b.total))[0]?.brand ?? "—";
 
+  const delayedByLocationMap = new Map(delayedByLocation.map((g) => [g.locationId, g._count._all]));
+  const locationRows = totalByLocation.map((g) => ({
+    location: dims.locations.get(g.locationId)?.name ?? "Unknown",
+    total: g._count._all,
+    delayed: delayedByLocationMap.get(g.locationId) ?? 0,
+  }));
+
+  const prepRows = prepByBrand.map((g) => ({
+    brand: dims.brands.get(g.brandId)?.name ?? "Unknown",
+    estimated: num(g._avg.estimatedPrepTime),
+    actual: num(g._avg.actualPrepTime),
+  }));
+
   return {
     kpis: [
       { key: "totalOrders", label: "Total Orders", value: fmtNumber(totalOrders) },
@@ -77,6 +107,26 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
         datasets: [
           { label: "Completed", data: brandRows.map((b) => b.total - b.delayed), kind: "bar" },
           { label: "Delayed", data: brandRows.map((b) => b.delayed), kind: "bar" },
+        ],
+      },
+      {
+        id: "completed-vs-delayed-by-location",
+        title: "Completed vs Delayed (>10min) by Branch",
+        type: "bar",
+        labels: locationRows.map((l) => l.location),
+        datasets: [
+          { label: "Completed", data: locationRows.map((l) => l.total - l.delayed), kind: "bar" },
+          { label: "Delayed", data: locationRows.map((l) => l.delayed), kind: "bar" },
+        ],
+      },
+      {
+        id: "prep-time-vs-estimated",
+        title: "Vendor Preparation Time vs Estimated",
+        type: "bar",
+        labels: prepRows.map((p) => p.brand),
+        datasets: [
+          { label: "Estimated", data: prepRows.map((p) => p.estimated), kind: "bar" },
+          { label: "Actual", data: prepRows.map((p) => p.actual), kind: "bar" },
         ],
       },
     ],
