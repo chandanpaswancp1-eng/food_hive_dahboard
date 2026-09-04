@@ -5,22 +5,20 @@ import type { SyncStatusPayload } from "@/lib/types";
 interface Props {
   sync: SyncStatusPayload | null;
   onExport: () => void;
-  onRefresh: () => void;
-  refreshing: boolean;
   importMessage?: string | null;
 }
 
-export function Header({ sync, onExport, onRefresh, refreshing, importMessage }: Props) {
+export function Header({ sync, onExport, importMessage }: Props) {
   const dotClass =
     sync?.mode === "live" ? "live" : sync?.mode === "error" ? "error" : sync?.mode === "local" ? "local" : "";
   const label =
     sync?.mode === "live"
-      ? "Grubtech · live"
+      ? "Data imported"
       : sync?.mode === "error"
-        ? "Grubcenter unreachable · local"
+        ? "Last import failed"
         : sync?.mode === "local"
-          ? "Syncing…"
-          : "Local feed";
+          ? "Importing…"
+          : "No data yet";
 
   return (
     <header className="app-header">
@@ -37,9 +35,6 @@ export function Header({ sync, onExport, onRefresh, refreshing, importMessage }:
         {importMessage && <span className="panel-caption">{importMessage}</span>}
         <button className="btn btn-secondary" onClick={onExport}>
           Export CSV
-        </button>
-        <button className="btn btn-primary" onClick={onRefresh} disabled={refreshing}>
-          {refreshing ? "Syncing…" : "Refresh"}
         </button>
       </div>
     </header>

@@ -27,7 +27,6 @@ export default function DashboardPage() {
   const [payload, setPayload] = useState<TabPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
@@ -154,25 +153,9 @@ export default function DashboardPage() {
     window.location.href = `/api/export/csv?${filtersToParams(filters)}`;
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await fetch("/api/sync/trigger", { method: "POST" });
-    setTimeout(() => {
-      loadSyncStatus();
-      setRefreshing(false);
-      updateFilters({ ...filters });
-    }, 4000);
-  };
-
   return (
     <div>
-      <Header
-        sync={sync}
-        onExport={handleExport}
-        onRefresh={handleRefresh}
-        refreshing={refreshing}
-        importMessage={importMessage}
-      />
+      <Header sync={sync} onExport={handleExport} importMessage={importMessage} />
       <FilterBar
         filters={filters}
         options={options}
