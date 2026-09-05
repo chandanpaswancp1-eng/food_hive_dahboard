@@ -25,7 +25,6 @@ export function Sidebar({ active, onChange }: { active: TabId; onChange: (t: Tab
           className="sidebar-logo sidebar-logo-dark"
           priority
         />
-        <span className="sidebar-brand-caption">Operations Dashboard</span>
       </div>
       <nav className="sidebar-nav">
         {TAB_IDS.map((id) => {
@@ -36,7 +35,7 @@ export function Sidebar({ active, onChange }: { active: TabId; onChange: (t: Tab
               className={`sidebar-nav-item${id === active ? " active" : ""}`}
               onClick={() => onChange(id)}
             >
-              <Icon size={20} />
+              <Icon size={18} />
               <span>{TAB_LABELS[id]}</span>
             </button>
           );
