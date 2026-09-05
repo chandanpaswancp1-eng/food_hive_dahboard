@@ -1,5 +1,6 @@
 "use client";
 
+import { SearchX } from "lucide-react";
 import type { TableSpec } from "@/lib/types";
 
 interface Props {
@@ -38,7 +39,12 @@ export function DataTable({ spec, onRowClick }: Props) {
           </tbody>
         </table>
       </div>
-      {!spec.rows.length && <div className="empty-state">No data for the selected filters.</div>}
+      {!spec.rows.length && (
+        <div className="empty-state">
+          <SearchX size={28} />
+          No data for the selected filters.
+        </div>
+      )}
     </div>
   );
 }

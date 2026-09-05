@@ -1,5 +1,6 @@
 "use client";
 
+import { RotateCcw } from "lucide-react";
 import type { DashboardFilters, FilterOptions } from "@/lib/types";
 
 interface Props {
@@ -72,6 +73,7 @@ export function FilterBar({ filters, options, onChange, onReset, scopeLabel }: P
         onChange={(v) => setSingle("paymentMethods", v)}
       />
       <button className="btn btn-ghost" onClick={onReset}>
+        <RotateCcw size={14} />
         Reset
       </button>
       <div className="filter-scope">{scopeLabel}</div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { Inbox } from "lucide-react";
 import { KpiStrip } from "./KpiStrip";
 import { ChartPanel } from "./ChartPanel";
 import { DataTable } from "./DataTable";
@@ -23,10 +24,13 @@ export function DashboardTabView({ payload, loading, activeTab, importing, onImp
         <TabImportButton tab={activeTab} importing={importing} onImport={onImport} />
       </div>
       {loading || !payload ? (
-        <div className="empty-state">Loading feed…</div>
+        <div className="empty-state">
+          <Inbox size={32} />
+          Loading feed…
+        </div>
       ) : (
         <>
-          <KpiStrip kpis={payload.kpis} />
+          <KpiStrip kpis={payload.kpis} activeTab={activeTab} />
           <div className="chart-grid">
             {payload.charts.map((chart) => (
               <ChartPanel key={chart.id} spec={chart} onSlice={onDrill} />

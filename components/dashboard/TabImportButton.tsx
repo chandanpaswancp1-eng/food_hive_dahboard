@@ -1,5 +1,6 @@
 "use client";
 
+import { Upload } from "lucide-react";
 import { TAB_IMPORT_CONFIG, type ReportTypeHint, type TabId } from "@/lib/types";
 
 interface Props {
@@ -13,6 +14,7 @@ export function TabImportButton({ tab, importing, onImport }: Props) {
 
   return (
     <label className="btn btn-secondary">
+      <Upload size={14} />
       {importing ? "Importing…" : config.label}
       <input
         type="file"

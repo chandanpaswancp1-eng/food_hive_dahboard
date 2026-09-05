@@ -13,9 +13,17 @@ export const metadata: Metadata = {
   description: "Multi-brand cloud-kitchen operations & sales dashboard.",
 };
 
+// Runs before first paint/hydration to set the theme attribute without a
+// flash of the wrong theme. Kept inline (not a module) since it must block
+// rendering — an external/deferred script would run too late.
+const THEME_INIT_SCRIPT = `(function(){try{var t=localStorage.getItem('foodhive-theme');if(t!=='light'&&t!=='dark'){t=window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';}document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`;
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={archivo.variable}>
+    <html lang="en" className={archivo.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body>{children}</body>
     </html>
   );

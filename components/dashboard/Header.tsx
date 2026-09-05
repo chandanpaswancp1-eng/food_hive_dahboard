@@ -1,39 +1,41 @@
 "use client";
 
-import type { SyncStatusPayload } from "@/lib/types";
+import { CheckCircle2, Circle, AlertCircle, Loader2, Download } from "lucide-react";
+import type { SyncStatusPayload, TabId } from "@/lib/types";
+import { TAB_LABELS } from "@/lib/types";
 
 interface Props {
   sync: SyncStatusPayload | null;
   onExport: () => void;
   importMessage?: string | null;
+  activeTab: TabId;
 }
 
-export function Header({ sync, onExport, importMessage }: Props) {
-  const dotClass =
-    sync?.mode === "live" ? "live" : sync?.mode === "error" ? "error" : sync?.mode === "local" ? "local" : "";
+export function Header({ sync, onExport, importMessage, activeTab }: Props) {
+  const mode = sync?.mode ?? "none";
   const label =
-    sync?.mode === "live"
+    mode === "live"
       ? "Data imported"
-      : sync?.mode === "error"
+      : mode === "error"
         ? "Last import failed"
-        : sync?.mode === "local"
+        : mode === "local"
           ? "Importing…"
           : "No data yet";
 
+  const Icon = mode === "live" ? CheckCircle2 : mode === "error" ? AlertCircle : mode === "local" ? Loader2 : Circle;
+
   return (
     <header className="app-header">
-      <div>
-        <div className="wordmark">FOODHIVE</div>
-        <div className="wordmark-sub">Operations Dashboard</div>
-      </div>
+      <h2 className="header-title">{TAB_LABELS[activeTab]}</h2>
       <div className="header-actions">
         <div className="sync-pill">
-          <span className={`sync-dot ${dotClass}`} />
+          <Icon className={`sync-icon ${mode}`} size={14} />
           <span>{label}</span>
           {sync?.lastSyncedAt && <span>· {new Date(sync.lastSyncedAt).toLocaleTimeString()}</span>}
         </div>
         {importMessage && <span className="panel-caption">{importMessage}</span>}
         <button className="btn btn-secondary" onClick={onExport}>
+          <Download size={14} />
           Export CSV
         </button>
       </div>

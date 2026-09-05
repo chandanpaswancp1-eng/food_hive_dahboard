@@ -4,15 +4,7 @@ import "@/lib/chartSetup";
 import { Bar, Line, Doughnut, Chart } from "react-chartjs-2";
 import type { ChartSpec, DashboardFilters } from "@/lib/types";
 import { dimensionFilter } from "@/lib/drillthrough";
-
-const INK = "#201e1d";
-const ACCENT = "#ec3013";
-const MUTE = "#9b9797";
-const LIGHT = "#d7d3d3";
-const DEEP = "#7c1405";
-const SLATE = "#605d5d";
-
-const PALETTE = [INK, ACCENT, MUTE, LIGHT, DEEP, SLATE];
+import { getChartPalette, getGridColor, getInkColor, getSurfaceColor } from "@/lib/theme";
 
 // Sums/averages computed via floating-point arithmetic (e.g. 2929.8399999999992)
 // need rounding before display — Chart.js shows raw values otherwise.
@@ -22,6 +14,9 @@ function formatNumber(value: number): string {
 
 function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x", onIndexClick?: (index: number) => void) {
   const valueTicks = { callback: (value: unknown) => formatNumber(Number(value)) };
+  const ink = getInkColor();
+  const grid = getGridColor();
+  const surface = getSurfaceColor();
 
   return {
     responsive: true,
@@ -42,10 +37,13 @@ function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x", onIndex
         }
       : undefined,
     plugins: {
-      legend: { display: true, position: "bottom" as const },
+      legend: { display: true, position: "bottom" as const, labels: { color: ink, usePointStyle: true } },
       tooltip: {
-        backgroundColor: INK,
-        cornerRadius: 0,
+        backgroundColor: ink,
+        titleColor: surface,
+        bodyColor: surface,
+        cornerRadius: 8,
+        padding: 10,
         titleFont: { weight: 800 as const },
         callbacks: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,18 +56,20 @@ function baseOptions(hasSecondAxis: boolean, indexAxis: "x" | "y" = "x", onIndex
     },
     scales: {
       x: {
-        grid: { color: LIGHT },
-        border: { color: INK },
-        ...(indexAxis === "y" ? { ticks: valueTicks } : {}),
+        grid: { color: grid },
+        border: { color: grid },
+        ticks: { color: ink },
+        ...(indexAxis === "y" ? { ticks: { ...valueTicks, color: ink } } : {}),
       },
       y: {
-        grid: { color: LIGHT },
-        border: { color: INK },
+        grid: { color: grid },
+        border: { color: grid },
+        ticks: { color: ink },
         position: "left" as const,
-        ...(indexAxis === "x" ? { ticks: valueTicks } : {}),
+        ...(indexAxis === "x" ? { ticks: { ...valueTicks, color: ink } } : {}),
       },
       ...(hasSecondAxis
-        ? { y1: { position: "right" as const, grid: { display: false }, border: { color: INK }, ticks: valueTicks } }
+        ? { y1: { position: "right" as const, grid: { display: false }, border: { color: grid }, ticks: { ...valueTicks, color: ink } } }
         : {}),
     },
   };
@@ -81,16 +81,20 @@ interface Props {
 }
 
 export function ChartPanel({ spec, onSlice }: Props) {
+  const palette = getChartPalette();
+  const ink = getInkColor();
+
   const data = {
     labels: spec.labels,
     datasets: spec.datasets.map((ds, i) => ({
       label: ds.label,
       data: ds.data,
-      backgroundColor: ds.kind === "line" ? "transparent" : PALETTE[i % PALETTE.length],
-      borderColor: PALETTE[i % PALETTE.length],
-      borderRadius: 0,
+      backgroundColor: ds.kind === "line" ? "transparent" : palette[i % palette.length],
+      borderColor: ds.kind === "line" ? palette[i % palette.length] : "transparent",
+      borderRadius: ds.kind === "line" ? 0 : 6,
       borderWidth: ds.kind === "line" ? 2 : 0,
       pointRadius: ds.kind === "line" ? 2 : 0,
+      pointBackgroundColor: palette[i % palette.length],
       tension: 0.3,
       yAxisID: ds.yAxisId ?? "y",
       type: spec.type === "combo" ? ds.kind ?? "bar" : undefined,
@@ -108,17 +112,24 @@ export function ChartPanel({ spec, onSlice }: Props) {
   let body: React.ReactNode;
 
   if (spec.type === "doughnut") {
+    const surface = getSurfaceColor();
     body = (
       <Doughnut
-        data={{ labels: spec.labels, datasets: [{ data: spec.datasets[0]?.data ?? [], backgroundColor: PALETTE }] }}
+        data={{
+          labels: spec.labels,
+          datasets: [{ data: spec.datasets[0]?.data ?? [], backgroundColor: palette, borderColor: surface, borderWidth: 2 }],
+        }}
         options={{
           responsive: true,
           maintainAspectRatio: false,
           plugins: {
-            legend: { position: "bottom" },
+            legend: { position: "bottom", labels: { color: ink, usePointStyle: true } },
             tooltip: {
-              backgroundColor: INK,
-              cornerRadius: 0,
+              backgroundColor: ink,
+              titleColor: surface,
+              bodyColor: surface,
+              cornerRadius: 8,
+              padding: 10,
               callbacks: {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 label: (ctx: any) => `${ctx.label}: ${formatNumber(ctx.parsed)}`,

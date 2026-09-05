@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
 import { FilterBar } from "@/components/dashboard/FilterBar";
-import { TabBar } from "@/components/dashboard/TabBar";
+import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardTabView } from "@/components/dashboard/DashboardTabView";
 import { DrillThroughModal } from "@/components/dashboard/DrillThroughModal";
 import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
@@ -154,34 +154,36 @@ export default function DashboardPage() {
   };
 
   return (
-    <div>
-      <Header sync={sync} onExport={handleExport} importMessage={importMessage} />
-      <FilterBar
-        filters={filters}
-        options={options}
-        onChange={updateFilters}
-        onReset={() => updateFilters({})}
-        scopeLabel={payload ? `${payload.scope.orderCount} orders in scope` : "Loading feed…"}
-      />
-      <TabBar active={activeTab} onChange={updateTab} />
-      <main className="dashboard-main">
-        {dbError ? (
-          <div className="panel db-error-banner">
-            <div className="badge">Database Unavailable</div>
-            <h4>Can&rsquo;t reach the database</h4>
-            <p>{dbError}</p>
-          </div>
-        ) : (
-          <DashboardTabView
-            payload={payload}
-            loading={loading}
-            activeTab={activeTab}
-            importing={importing}
-            onImport={handleImport}
-            onDrill={setDrillScope}
-          />
-        )}
-      </main>
+    <div className="app-shell">
+      <Sidebar active={activeTab} onChange={updateTab} />
+      <div className="app-content">
+        <Header sync={sync} onExport={handleExport} importMessage={importMessage} activeTab={activeTab} />
+        <FilterBar
+          filters={filters}
+          options={options}
+          onChange={updateFilters}
+          onReset={() => updateFilters({})}
+          scopeLabel={payload ? `${payload.scope.orderCount} orders in scope` : "Loading feed…"}
+        />
+        <main className="dashboard-main">
+          {dbError ? (
+            <div className="panel db-error-banner">
+              <div className="badge">Database Unavailable</div>
+              <h4>Can&rsquo;t reach the database</h4>
+              <p>{dbError}</p>
+            </div>
+          ) : (
+            <DashboardTabView
+              payload={payload}
+              loading={loading}
+              activeTab={activeTab}
+              importing={importing}
+              onImport={handleImport}
+              onDrill={setDrillScope}
+            />
+          )}
+        </main>
+      </div>
       {drillScope && <DrillThroughModal filters={filters} scope={drillScope} onClose={() => setDrillScope(null)} />}
     </div>
   );
