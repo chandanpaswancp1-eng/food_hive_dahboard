@@ -14,6 +14,17 @@ const SOURCE = "grubcenter-live";
 // externalId and safely re-writes the same/updated row.
 const LOOKBACK_MINUTES = 30;
 
+// Extra safety margin subtracted from the last successful run's window when
+// resuming from a watermark — covers clock skew and any last-moment orders
+// GrubCenter hadn't finished writing yet when that run completed.
+const WATERMARK_OVERLAP_MINUTES = 5;
+
+// Caps how far back a resumed sync will reach after a long gap (server down,
+// crashed, laptop asleep) so one catch-up tick can't try to page through
+// months of history. Orders older than this that were never ingested stay
+// missing — a real historical backfill should use the CSV import instead.
+const MAX_BACKFILL_HOURS = 48;
+
 // A RUNNING row older than this is assumed to be from a crashed process,
 // not a genuinely in-flight sync — proceed rather than deadlock forever.
 const STALE_RUNNING_MINUTES = 15;
@@ -31,7 +42,28 @@ export async function runLiveSync(): Promise<{ recordsIngested: number; issues: 
 
   try {
     const to = new Date();
-    const from = new Date(to.getTime() - LOOKBACK_MINUTES * 60_000);
+    const rollingFrom = new Date(to.getTime() - LOOKBACK_MINUTES * 60_000);
+
+    // Resume from where the last successful run left off (minus overlap)
+    // rather than always using a fixed rolling lookback — otherwise any gap
+    // in server uptime longer than LOOKBACK_MINUTES (a restart, a crash, the
+    // dev server being stopped) permanently drops orders that arrived during
+    // the gap, since no later tick's window would ever reach back far enough
+    // to fetch them again.
+    const lastSuccess = await prisma.syncLog.findFirst({
+      where: { source: SOURCE, status: "SUCCESS", windowTo: { not: null } },
+      orderBy: { startedAt: "desc" },
+      select: { windowTo: true },
+    });
+    const minFrom = new Date(to.getTime() - MAX_BACKFILL_HOURS * 60 * 60_000);
+    const watermarkFrom = lastSuccess?.windowTo
+      ? new Date(lastSuccess.windowTo.getTime() - WATERMARK_OVERLAP_MINUTES * 60_000)
+      : null;
+    const from =
+      watermarkFrom && watermarkFrom < rollingFrom
+        ? new Date(Math.max(watermarkFrom.getTime(), minFrom.getTime()))
+        : rollingFrom;
+
     const rawOrders = await fetchLiveOrders(from, to);
     const result = await ingestRawOrders(rawOrders);
 
@@ -44,6 +76,7 @@ export async function runLiveSync(): Promise<{ recordsIngested: number; issues: 
         status: "SUCCESS",
         finishedAt: new Date(),
         recordsIngested: result.ingested,
+        windowTo: to,
         errorMessage: result.issues.length ? result.issues.slice(0, 20).join(" | ") : null,
       },
     });

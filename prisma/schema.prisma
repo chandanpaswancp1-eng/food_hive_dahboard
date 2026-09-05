@@ -215,6 +215,11 @@ model SyncLog {
   recordsIngested  Int        @default(0)
   errorMessage     String?
   source           String     @default("grubcenter")
+  /// The `to` boundary of the GrubCenter fetch window this run completed
+  /// successfully through — the next run resumes from here (minus a small
+  /// overlap) instead of a fixed rolling lookback, so a gap in server
+  /// uptime longer than the lookback window doesn't silently drop orders.
+  windowTo         DateTime?
 
   @@index([startedAt])
 }
