@@ -269,7 +269,9 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         orders: fmtNumber(b.orders),
         aov: fmtCurrency(safeDiv(b.netSales, b.orders)),
         discount: fmtCurrency(b.discount),
-        discountPct: fmtPercent(safeDiv(b.discount, b.netSales) * 100),
+        // Discount rate off the original (pre-discount) price — netSales is
+        // already post-discount, so the base is netSales + discount, not netSales.
+        discountPct: fmtPercent(safeDiv(b.discount, b.netSales + b.discount) * 100),
       })),
     },
     extraTables: [
