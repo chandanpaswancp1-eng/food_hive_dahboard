@@ -77,14 +77,14 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
   const brandRows = byBrandGroups.map((g) => ({
     brand: dims.brands.get(g.brandId)?.name ?? "Unknown",
     orders: g._count._all,
-    cycle: num(g._avg.durReceivedToDelivered),
+    cycle: g._avg.durReceivedToDelivered !== null ? num(g._avg.durReceivedToDelivered) : null,
     stages: STAGE_FIELDS.map((field) => ({ label: STAGE_LABELS[field], avg: g._avg[field] !== null ? num(g._avg[field]) : null })),
   }));
 
   const brandLocationRows = locationPerfRows.map((r) => ({
     brand: r.brand.name,
     location: r.location.name,
-    cycle: num(r.durReceivedToDelivered),
+    cycle: r.durReceivedToDelivered !== null ? num(r.durReceivedToDelivered) : null,
     stages: LPA_STAGE_FIELDS.map((field) => ({
       label: LPA_STAGE_LABELS[field],
       avg: r[field] !== null ? num(r[field]) : null,
@@ -102,7 +102,7 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
   };
 
   const rankedByCycle = sortDesc(
-    brandRows.filter((b) => b.cycle > 0),
+    brandRows.filter((b): b is typeof b & { cycle: number } => (b.cycle ?? 0) > 0),
     (b) => -b.cycle,
   );
   const fastest = rankedByCycle[0];
@@ -167,7 +167,7 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
         type: "bar",
         dimension: "brand",
         labels: brandRows.map((b) => b.brand),
-        datasets: [{ label: "Minutes", data: brandRows.map((b) => b.cycle) }],
+        datasets: [{ label: "Minutes", data: brandRows.map((b) => b.cycle ?? 0) }],
       },
     ],
     table: {
@@ -176,13 +176,11 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
         { key: "brand", label: "Brand" },
         { key: "orders", label: "Orders", align: "right" },
         ...STAGE_FIELDS.map((field) => ({ key: STAGE_LABELS[field], label: STAGE_LABELS[field], align: "right" as const })),
-        { key: "cycle", label: "Received → Delivered", align: "right" as const },
       ],
       rows: brandRows.map((b) => ({
         brand: b.brand,
         orders: fmtNumber(b.orders),
         ...Object.fromEntries(b.stages.map((s) => [s.label, fmtMinutes(s.avg)])),
-        cycle: fmtMinutes(b.cycle),
       })),
     },
     extraTables: [
@@ -192,13 +190,11 @@ export async function buildPrepTimeTab(where: Prisma.OrderWhereInput): Promise<T
           { key: "brand", label: "Brand" },
           { key: "location", label: "Location" },
           ...LPA_STAGE_FIELDS.map((field) => ({ key: LPA_STAGE_LABELS[field], label: LPA_STAGE_LABELS[field], align: "right" as const })),
-          { key: "cycle", label: "Received → Delivered", align: "right" as const },
         ],
-        rows: sortDesc(brandLocationRows, (r) => r.cycle).map((r) => ({
+        rows: sortDesc(brandLocationRows, (r) => r.cycle ?? 0).map((r) => ({
           brand: r.brand,
           location: r.location,
           ...Object.fromEntries(r.stages.map((s) => [s.label, fmtMinutes(s.avg)])),
-          cycle: fmtMinutes(r.cycle),
         })),
       },
     ],
