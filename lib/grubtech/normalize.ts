@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { dubaiDayName, dubaiDayOfWeek, dubaiHour, setDubaiHour } from "./dubaiTime";
 
 /**
  * Field-alias map, matched exactly (case/space-sensitive) against whatever
@@ -241,13 +242,14 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
     return { ok: false, issues: [`brand: KSA branch excluded (${data.brand})`], raw };
   }
 
-  const receivedDate = new Date(data.receivedAt);
+  let receivedDate = new Date(data.receivedAt);
   if (data.hour !== undefined) {
     // Date-only column + a separate real hour column — the timestamp's own
     // time-of-day is a meaningless constant, so splice in the real hour.
-    receivedDate.setUTCHours(data.hour, 0, 0, 0);
+    // Both the date and the hour are Dubai local, per GrubCenter's exports.
+    receivedDate = setDubaiHour(receivedDate, data.hour);
   }
-  const hour = receivedDate.getUTCHours();
+  const hour = dubaiHour(receivedDate);
   const receivedAtIso = receivedDate.toISOString();
 
   const durAccToStarted = minutesBetween(data.acceptedAt, data.startedAt);
@@ -276,8 +278,8 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
         durReceivedToDelivered,
       },
       calendar: {
-        dayName: receivedDate.toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }),
-        dayOfWeek: receivedDate.getUTCDay(),
+        dayName: dubaiDayName(receivedDate),
+        dayOfWeek: dubaiDayOfWeek(receivedDate),
         hour,
         timeSlot: timeSlotFor(hour),
         timeOfDay: timeOfDayFor(hour),

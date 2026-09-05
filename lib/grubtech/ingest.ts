@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { ItemType, OrderStatus, Prisma } from "@prisma/client";
 import { normalizeRawOrder, type NormalizedOrder } from "./normalize";
+import { dubaiDateKey } from "./dubaiTime";
 
 /**
  * Resolving Brand/Location/Channel/CancellationReason per row (4 upserts x
@@ -147,7 +148,7 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     channelId,
     cancellationReasonId,
     receivedAt: new Date(order.receivedAt),
-    receivedDateKey: order.receivedAt.slice(0, 10),
+    receivedDateKey: dubaiDateKey(new Date(order.receivedAt)),
     acceptedAt: order.acceptedAt ? new Date(order.acceptedAt) : null,
     startedAt: order.startedAt ? new Date(order.startedAt) : null,
     preparedAt: order.preparedAt ? new Date(order.preparedAt) : null,

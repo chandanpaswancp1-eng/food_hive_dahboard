@@ -1,5 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import type { DashboardFilters } from "./types";
+import { dubaiDateBoundaryToUtc } from "./grubtech/dubaiTime";
 
 export function parseFilters(searchParams: URLSearchParams): DashboardFilters {
   const multi = (key: string) => {
@@ -23,8 +24,8 @@ export function buildOrderWhere(filters: DashboardFilters): Prisma.OrderWhereInp
 
   if (filters.dateFrom || filters.dateTo) {
     where.receivedAt = {
-      ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
-      ...(filters.dateTo ? { lte: new Date(`${filters.dateTo}T23:59:59.999Z`) } : {}),
+      ...(filters.dateFrom ? { gte: dubaiDateBoundaryToUtc(filters.dateFrom, false) } : {}),
+      ...(filters.dateTo ? { lte: dubaiDateBoundaryToUtc(filters.dateTo, true) } : {}),
     };
   }
 
@@ -56,8 +57,8 @@ export function buildStockoutWhere(filters: DashboardFilters): Prisma.StockoutEv
 
   if (filters.dateFrom || filters.dateTo) {
     where.markedUnavailableAt = {
-      ...(filters.dateFrom ? { gte: new Date(filters.dateFrom) } : {}),
-      ...(filters.dateTo ? { lte: new Date(`${filters.dateTo}T23:59:59.999Z`) } : {}),
+      ...(filters.dateFrom ? { gte: dubaiDateBoundaryToUtc(filters.dateFrom, false) } : {}),
+      ...(filters.dateTo ? { lte: dubaiDateBoundaryToUtc(filters.dateTo, true) } : {}),
     };
   }
 

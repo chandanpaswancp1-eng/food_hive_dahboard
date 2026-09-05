@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
+import { dubaiDateKey } from "../dubaiTime";
 
 export interface DimensionMaps {
   brands: Map<string, { name: string; cuisine: string | null }>;
@@ -65,7 +66,7 @@ export function num(value: unknown): number {
 }
 
 export function dateKey(d: Date): string {
-  return d.toISOString().slice(0, 10);
+  return dubaiDateKey(d);
 }
 
 export function sortDesc<T>(rows: T[], key: (row: T) => number): T[] {

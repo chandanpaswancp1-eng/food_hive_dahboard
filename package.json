@@ -11,7 +11,8 @@
     "prisma:generate": "dotenv -e .env.local -- prisma generate",
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "playwright:install": "playwright install chromium",
-    "discover:grubcenter": "dotenv -e .env.local -- tsx scraper/discover.ts"
+    "discover:grubcenter": "dotenv -e .env.local -- tsx scraper/discover.ts",
+    "backfill:dubai-calendar": "dotenv -e .env.local -- tsx scripts/backfillDubaiCalendarFields.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
