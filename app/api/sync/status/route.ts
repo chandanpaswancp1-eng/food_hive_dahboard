@@ -5,12 +5,13 @@ import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 
 export async function GET() {
   try {
-    // Scoped to source:"import" specifically — a GrubCenter live-sync attempt
-    // (source defaults to "grubcenter", written by the not-yet-functional
-    // scraper/sync.ts) shouldn't show as a broken "unreachable" state on top
-    // of otherwise-healthy imported data. This pill reflects your imports.
+    // Scoped to "import" and "grubcenter-live" — real data sources. Deliberately
+    // excludes the legacy default source "grubcenter", written by the old,
+    // never-functional Playwright scraper, so a stale/broken row from that
+    // path can never again surface as a confusing "unreachable" state on top
+    // of otherwise-healthy data.
     const last = await prisma.syncLog.findFirst({
-      where: { source: "import" },
+      where: { source: { in: ["import", "grubcenter-live"] } },
       orderBy: { startedAt: "desc" },
     });
 

@@ -2,10 +2,13 @@ import { z } from "zod";
 
 /**
  * Field-alias map, matched exactly (case/space-sensitive) against whatever
- * key names a row actually has. Two sources feed this:
- *  - GrubCenter's internal report APIs (not captured yet — run
- *    `npm run discover:grubcenter`, see scraper/discover.ts), guessed from
- *    the old Kaykroo prototype's Grubtech field-mapping (snake_case/camelCase).
+ * key names a row actually has. Three sources feed this:
+ *  - GrubCenter's real internal-api.grubtech.io JSON endpoints (see
+ *    lib/grubtech/liveApi/fetchOrders.ts), confirmed by inspecting live
+ *    network traffic — e.g. "brandName"/"kitchenName"/"netPrice"/
+ *    "priceCurrency"/"sentToDispatcherAt".
+ *  - Guessed snake_case/camelCase aliases from the old Kaykroo prototype's
+ *    field-mapping, kept in case a not-yet-seen export/endpoint uses them.
  *  - Real GrubCenter Excel exports (order-details_*.xlsx, cancelled-orders_*.xlsx,
  *    uploaded via the dashboard's Import button) — headers confirmed from a
  *    same-system reference file (Kaykroo_Dashboard.xlsx / data.xlsx), e.g.
@@ -16,12 +19,12 @@ import { z } from "zod";
  */
 const ALIASES = {
   id: ["Unique Order ID", "Order ID", "id", "order_id", "orderId"],
-  orderNumber: ["Order ID", "order_number", "orderNumber", "number"],
+  orderNumber: ["Order ID", "order_number", "orderNumber", "number", "externalId"],
   brand: ["Brand", "brand_name", "brandName", "brand"],
   cuisine: ["Cuisine Cluster", "cuisine", "cuisine_cluster", "cuisineCluster"],
-  location: ["Location", "location_name", "locationName", "location", "outlet"],
+  location: ["Location", "location_name", "locationName", "location", "outlet", "kitchenName"],
   vendorArea: ["vendor_area", "vendorArea", "area"],
-  channel: ["Channel", "channel", "channel_name", "channelName"],
+  channel: ["Channel", "channel", "channel_name", "channelName", "orderChannel"],
   paymentMethod: ["Payment Method", "payment_method", "paymentMethod"],
   receivedAt: [
     "Received At",
@@ -35,11 +38,11 @@ const ALIASES = {
   acceptedAt: ["accepted_at", "acceptedAt"],
   startedAt: ["started_at", "startedAt"],
   preparedAt: ["prepared_at", "preparedAt"],
-  sentToDispatchAt: ["sent_to_dispatch_at", "sentToDispatchAt"],
+  sentToDispatchAt: ["sent_to_dispatch_at", "sentToDispatchAt", "sentToDispatcherAt"],
   dispatchedAt: ["dispatched_at", "dispatchedAt"],
   deliveredAt: ["delivered_at", "deliveredAt"],
-  currency: ["Currency", "currency"],
-  netSales: ["Net Sales (AED)", "Net Sales", "Sales Amount", "net_sales", "netSales"],
+  currency: ["Currency", "currency", "priceCurrency"],
+  netSales: ["Net Sales (AED)", "Net Sales", "Sales Amount", "net_sales", "netSales", "netPrice"],
   receiptTotal: [
     "Receipt Total (AED)",
     "Total(Receipt Total)",
@@ -47,8 +50,9 @@ const ALIASES = {
     "receipt_total",
     "receiptTotal",
     "total",
+    "totalPrice",
   ],
-  discountAmount: ["Discount (AED)", "Discount", "discount_amount", "discountAmount"],
+  discountAmount: ["Discount (AED)", "Discount", "discount_amount", "discountAmount", "discountedAmount"],
   status: ["Order Status", "order_status", "orderStatus", "status"],
   cancellationReason: [
     "Cancellation Reason",
