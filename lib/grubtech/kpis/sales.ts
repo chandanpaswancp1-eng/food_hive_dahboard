@@ -7,8 +7,12 @@ import { num, sortDesc, loadDimensionMaps } from "./shared";
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
 export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
-  const completedWhere: Prisma.OrderWhereInput = { ...where, status: "COMPLETED" };
-
+  // GrubCenter's own Net Sales/Total Orders figures count every order in the
+  // period regardless of status — cancelled orders still carry a netSales
+  // value there. Matching that (rather than filtering to COMPLETED) is what
+  // keeps this tab's totals equal to GrubCenter's report and to the "orders
+  // in scope" count shown in the filter bar. Cancellation-specific breakdowns
+  // (reasons, lost revenue, trend) live on the dedicated Cancellations tab.
   const [
     totals,
     dims,
@@ -19,57 +23,55 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
     byTimeSlotGroups,
     byLocationGroups,
     byDayGroups,
-    scopeCount,
   ] = await Promise.all([
     prisma.order.aggregate({
-      where: completedWhere,
+      where,
       _sum: { netSales: true, receiptTotal: true, discountAmount: true },
       _count: { _all: true },
     }),
     loadDimensionMaps(),
     prisma.order.groupBy({
       by: ["brandId"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true, discountAmount: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["channelId"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["receivedDateKey"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["hour"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["timeSlot"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["locationId"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
       by: ["dayName"],
-      where: completedWhere,
+      where,
       _sum: { netSales: true },
       _count: { _all: true },
     }),
-    prisma.order.count({ where }),
   ]);
 
   const netSales = num(totals._sum.netSales);
@@ -317,6 +319,6 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         })),
       },
     ],
-    scope: { orderCount: scopeCount },
+    scope: { orderCount: totalOrders },
   };
 }
