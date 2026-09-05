@@ -77,6 +77,9 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
   const netSales = num(totals._sum.netSales);
   const receiptTotal = num(totals._sum.receiptTotal);
   const totalDiscount = num(totals._sum.discountAmount);
+  // Sales before discounts were applied — GrubCenter doesn't export this
+  // directly, so it's derived from the two figures it does export.
+  const grossSales = netSales + totalDiscount;
   const totalOrders = totals._count._all;
   const aov = safeDiv(netSales, totalOrders);
 
@@ -167,6 +170,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   return {
     kpis: [
+      { key: "grossSales", label: "Gross Sales", value: fmtCurrencyCompact(grossSales), fullValue: fmtCurrencyExact(grossSales) },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
       { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders), fullValue: fmtNumber(totalOrders) },
       { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
