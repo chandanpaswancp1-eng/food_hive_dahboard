@@ -61,8 +61,8 @@ function withDefaultStatus(rows: Record<string, string>[], status: "Completed" |
  * large file) — running it inline blocked the HTTP request until it finished,
  * which is exactly what got killed by a platform proxy timeout on a real
  * 40MB import. Runs detached (not awaited by the caller); the client polls
- * /api/jobs/[id] instead, the same fire-and-forget + poll pattern
- * scraper/sync.ts already uses for GrubCenter syncs.
+ * /api/jobs/[id] instead, the same fire-and-forget pattern
+ * lib/grubtech/liveApi/runLiveSync.ts uses for GrubCenter syncs.
  */
 async function runImportInBackground(
   jobId: string,
