@@ -96,11 +96,18 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   // Cuisine only exists on Brand, not as a column on Order — re-roll the
   // already-fetched (small) brand groups instead of a separate DB query.
-  const byCuisine = new Map<string, number>();
+  const byCuisine = new Map<string, { netSales: number; orders: number; discount: number }>();
   for (const b of brandRows) {
-    byCuisine.set(b.cuisine, (byCuisine.get(b.cuisine) ?? 0) + b.netSales);
+    const entry = byCuisine.get(b.cuisine) ?? { netSales: 0, orders: 0, discount: 0 };
+    entry.netSales += b.netSales;
+    entry.orders += b.orders;
+    entry.discount += b.discount;
+    byCuisine.set(b.cuisine, entry);
   }
-  const cuisineRows = sortDesc([...byCuisine.entries()], ([, v]) => v);
+  const cuisineRows = sortDesc(
+    [...byCuisine.entries()].map(([cuisine, v]) => ({ cuisine, ...v })),
+    (v) => v.netSales,
+  );
 
   const channelRows = sortDesc(
     byChannelGroups.map((g) => ({
@@ -115,6 +122,21 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
     .filter((g): g is typeof g & { receivedDateKey: string } => Boolean(g.receivedDateKey))
     .map((g) => ({ date: g.receivedDateKey, netSales: num(g._sum.netSales), orders: g._count._all }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
+
+  // No quarter field on Order — day-level sums are already fetched for the
+  // daily chart/report, so roll those up rather than a separate DB query.
+  const byQuarter = new Map<string, { netSales: number; orders: number }>();
+  for (const d of dateRows) {
+    const [year, month] = d.date.split("-").map(Number);
+    const key = `${year} Q${Math.ceil(month / 3)}`;
+    const entry = byQuarter.get(key) ?? { netSales: 0, orders: 0 };
+    entry.netSales += d.netSales;
+    entry.orders += d.orders;
+    byQuarter.set(key, entry);
+  }
+  const quarterRows = [...byQuarter.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([quarter, v]) => ({ quarter, ...v }));
 
   const hourRows = Array.from({ length: 24 }, (_, hour) => {
     const g = byHourGroups.find((row) => row.hour === hour);
@@ -178,8 +200,8 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         title: "Net Sales by Cuisine Cluster",
         type: "bar",
         dimension: "cuisine",
-        labels: cuisineRows.map(([cuisine]) => cuisine),
-        datasets: [{ label: "Net Sales", data: cuisineRows.map(([, v]) => v) }],
+        labels: cuisineRows.map((c) => c.cuisine),
+        datasets: [{ label: "Net Sales", data: cuisineRows.map((c) => c.netSales) }],
       },
       {
         id: "sales-by-hour",
@@ -244,6 +266,57 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         discountPct: fmtPercent(safeDiv(b.discount, b.netSales) * 100),
       })),
     },
+    extraTables: [
+      {
+        title: "Cuisine-Wise Report",
+        columns: [
+          { key: "cuisine", label: "Cuisine" },
+          { key: "netSales", label: "Net Sales", align: "right" },
+          { key: "orders", label: "Orders", align: "right" },
+          { key: "aov", label: "AOV", align: "right" },
+          { key: "discount", label: "Discount", align: "right" },
+          { key: "share", label: "Share of Sales", align: "right" },
+        ],
+        rows: cuisineRows.map((c) => ({
+          cuisine: c.cuisine,
+          netSales: fmtCurrency(c.netSales),
+          orders: fmtNumber(c.orders),
+          aov: fmtCurrency(safeDiv(c.netSales, c.orders)),
+          discount: fmtCurrency(c.discount),
+          share: fmtPercent(safeDiv(c.netSales, netSales) * 100),
+        })),
+      },
+      {
+        title: "Daily Report",
+        columns: [
+          { key: "date", label: "Date" },
+          { key: "netSales", label: "Net Sales", align: "right" },
+          { key: "orders", label: "Orders", align: "right" },
+          { key: "aov", label: "AOV", align: "right" },
+        ],
+        rows: [...dateRows].reverse().map((d) => ({
+          date: d.date,
+          netSales: fmtCurrency(d.netSales),
+          orders: fmtNumber(d.orders),
+          aov: fmtCurrency(safeDiv(d.netSales, d.orders)),
+        })),
+      },
+      {
+        title: "Quarterly Report",
+        columns: [
+          { key: "quarter", label: "Quarter" },
+          { key: "netSales", label: "Net Sales", align: "right" },
+          { key: "orders", label: "Orders", align: "right" },
+          { key: "aov", label: "AOV", align: "right" },
+        ],
+        rows: [...quarterRows].reverse().map((q) => ({
+          quarter: q.quarter,
+          netSales: fmtCurrency(q.netSales),
+          orders: fmtNumber(q.orders),
+          aov: fmtCurrency(safeDiv(q.netSales, q.orders)),
+        })),
+      },
+    ],
     scope: { orderCount: scopeCount },
   };
 }
