@@ -45,7 +45,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
     prisma.order.groupBy({
       by: ["receivedDateKey"],
       where,
-      _sum: { netSales: true },
+      _sum: { netSales: true, discountAmount: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
@@ -81,7 +81,11 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
   // directly, so it's derived from the two figures it does export.
   const grossSales = netSales + totalDiscount;
   const totalOrders = totals._count._all;
-  const aov = safeDiv(netSales, totalOrders);
+  // Matches GrubCenter's own "Avg. Order Value" tile, which divides by gross
+  // sales (pre-discount), not net sales — confirmed against their dashboard:
+  // 19,035.60 gross / 276 orders = 68.97, exactly their displayed AOV, while
+  // netSales / orders (12,238.50 / 276 = 44.34) does not match it.
+  const aov = safeDiv(grossSales, totalOrders);
 
   const days = byDateGroups.length || 1;
   const avgRunRate = netSales / days;
@@ -125,17 +129,23 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   const dateRows = byDateGroups
     .filter((g): g is typeof g & { receivedDateKey: string } => Boolean(g.receivedDateKey))
-    .map((g) => ({ date: g.receivedDateKey, netSales: num(g._sum.netSales), orders: g._count._all }))
+    .map((g) => ({
+      date: g.receivedDateKey,
+      netSales: num(g._sum.netSales),
+      discount: num(g._sum.discountAmount),
+      orders: g._count._all,
+    }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   // No quarter field on Order — day-level sums are already fetched for the
   // daily chart/report, so roll those up rather than a separate DB query.
-  const byQuarter = new Map<string, { netSales: number; orders: number }>();
+  const byQuarter = new Map<string, { netSales: number; discount: number; orders: number }>();
   for (const d of dateRows) {
     const [year, month] = d.date.split("-").map(Number);
     const key = `${year} Q${Math.ceil(month / 3)}`;
-    const entry = byQuarter.get(key) ?? { netSales: 0, orders: 0 };
+    const entry = byQuarter.get(key) ?? { netSales: 0, discount: 0, orders: 0 };
     entry.netSales += d.netSales;
+    entry.discount += d.discount;
     entry.orders += d.orders;
     byQuarter.set(key, entry);
   }
@@ -267,7 +277,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         cuisine: b.cuisine,
         netSales: fmtCurrency(b.netSales),
         orders: fmtNumber(b.orders),
-        aov: fmtCurrency(safeDiv(b.netSales, b.orders)),
+        aov: fmtCurrency(safeDiv(b.netSales + b.discount, b.orders)),
         discount: fmtCurrency(b.discount),
         // Discount rate off the original (pre-discount) price — netSales is
         // already post-discount, so the base is netSales + discount, not netSales.
@@ -289,7 +299,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           cuisine: c.cuisine,
           netSales: fmtCurrency(c.netSales),
           orders: fmtNumber(c.orders),
-          aov: fmtCurrency(safeDiv(c.netSales, c.orders)),
+          aov: fmtCurrency(safeDiv(c.netSales + c.discount, c.orders)),
           discount: fmtCurrency(c.discount),
           share: fmtPercent(safeDiv(c.netSales, netSales) * 100),
         })),
@@ -306,7 +316,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           date: d.date,
           netSales: fmtCurrency(d.netSales),
           orders: fmtNumber(d.orders),
-          aov: fmtCurrency(safeDiv(d.netSales, d.orders)),
+          aov: fmtCurrency(safeDiv(d.netSales + d.discount, d.orders)),
         })),
       },
       {
@@ -321,7 +331,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           quarter: q.quarter,
           netSales: fmtCurrency(q.netSales),
           orders: fmtNumber(q.orders),
-          aov: fmtCurrency(safeDiv(q.netSales, q.orders)),
+          aov: fmtCurrency(safeDiv(q.netSales + q.discount, q.orders)),
         })),
       },
     ],
