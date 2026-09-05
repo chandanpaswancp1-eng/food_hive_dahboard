@@ -74,10 +74,23 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
 
   return {
     kpis: [
-      { key: "totalRatings", label: "Total Ratings", value: fmtNumberCompact(total) },
+      { key: "totalRatings", label: "Total Ratings", value: fmtNumberCompact(total), fullValue: fmtNumber(total) },
       { key: "avgRating", label: "Average Rating", value: avgRating.toFixed(2) },
-      { key: "positive", label: "Positive Ratings", value: fmtNumberCompact(positive), subtitle: fmtPercent(safeDiv(positive, total) * 100) },
-      { key: "negative", label: "Negative Ratings", value: fmtNumberCompact(negative), subtitle: fmtPercent(safeDiv(negative, total) * 100), accent: true },
+      {
+        key: "positive",
+        label: "Positive Ratings",
+        value: fmtNumberCompact(positive),
+        fullValue: fmtNumber(positive),
+        subtitle: fmtPercent(safeDiv(positive, total) * 100),
+      },
+      {
+        key: "negative",
+        label: "Negative Ratings",
+        value: fmtNumberCompact(negative),
+        fullValue: fmtNumber(negative),
+        subtitle: fmtPercent(safeDiv(negative, total) * 100),
+        accent: true,
+      },
       { key: "polarity", label: "Polarity Rate", value: fmtPercent(polarity) },
     ],
     charts: [

@@ -30,7 +30,7 @@ export function buildStockoutsTab(events: LoadedStockout[], orderCount: number):
 
   return {
     kpis: [
-      { key: "totalStockouts", label: "86 Items", value: fmtNumberCompact(total), accent: true },
+      { key: "totalStockouts", label: "86 Items", value: fmtNumberCompact(total), fullValue: fmtNumber(total), accent: true },
       { key: "per1k", label: "Per 1K Orders", value: per1k.toFixed(1) },
       { key: "topBrand", label: "Brand with Most 86s", value: brandRows[0]?.[0] ?? "—" },
       { key: "topLocation", label: "Location with Most 86s", value: locationRows[0]?.[0] ?? "—" },

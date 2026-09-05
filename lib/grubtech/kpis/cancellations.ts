@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtCurrency, fmtCurrencyCompact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 
 export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
@@ -81,18 +81,31 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
 
   return {
     kpis: [
-      { key: "cancelledAmount", label: "Cancelled Amount", value: fmtCurrencyCompact(cancelledAmount), accent: true },
+      {
+        key: "cancelledAmount",
+        label: "Cancelled Amount",
+        value: fmtCurrencyCompact(cancelledAmount),
+        fullValue: fmtCurrencyExact(cancelledAmount),
+        accent: true,
+      },
       {
         key: "cancelledOrders",
         label: "Cancelled Orders",
         value: fmtNumberCompact(cancelledCount),
+        fullValue: fmtNumber(cancelledCount),
         subtitle: fmtPercent(cancelRate),
       },
-      { key: "cancelledAov", label: "Cancelled AOV", value: fmtCurrencyCompact(cancelledAov) },
+      {
+        key: "cancelledAov",
+        label: "Cancelled AOV",
+        value: fmtCurrencyCompact(cancelledAov),
+        fullValue: fmtCurrencyExact(cancelledAov),
+      },
       {
         key: "postCancelled",
         label: "Post-Cancelled",
         value: fmtNumberCompact(postCancelledCount),
+        fullValue: fmtNumber(postCancelledCount),
         subtitle: `${fmtPercent(postCancelledPct)} of cancellations`,
       },
       { key: "worstChannel", label: "Worst Channel", value: worstChannel },

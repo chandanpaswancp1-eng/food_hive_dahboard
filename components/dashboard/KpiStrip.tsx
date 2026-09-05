@@ -38,7 +38,7 @@ export function KpiStrip({ kpis, activeTab }: { kpis: KpiValue[]; activeTab: Tab
             </div>
             <div className="kpi-body">
               <div className="kpi-label">{k.label}</div>
-              <div className={`kpi-value${k.accent ? " accent" : ""}`} title={k.value}>
+              <div className={`kpi-value${k.accent ? " accent" : ""}`} title={k.fullValue ?? k.value}>
                 {k.value}
               </div>
               {k.subtitle && <div className="kpi-subtitle">{k.subtitle}</div>}

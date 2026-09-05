@@ -50,6 +50,8 @@ export interface KpiValue {
   key: string;
   label: string;
   value: string;
+  /** Full, non-abbreviated value shown on hover — falls back to `value` when the card was never compacted. */
+  fullValue?: string;
   subtitle?: string;
   accent?: boolean;
 }

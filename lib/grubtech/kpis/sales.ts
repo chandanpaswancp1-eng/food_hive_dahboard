@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtCurrency, fmtCurrencyCompact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
@@ -167,13 +167,13 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   return {
     kpis: [
-      { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales) },
-      { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders) },
-      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal) },
-      { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount) },
-      { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov) },
-      { key: "runRate", label: "Avg Run Rate", value: `${fmtCurrencyCompact(avgRunRate)}/day` },
-      { key: "projectedRR", label: "Projected RR", value: `${fmtCurrencyCompact(projectedRR)}/yr` },
+      { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
+      { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders), fullValue: fmtNumber(totalOrders) },
+      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
+      { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
+      { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
+      { key: "runRate", label: "Avg Run Rate", value: `${fmtCurrencyCompact(avgRunRate)}/day`, fullValue: `${fmtCurrencyExact(avgRunRate)}/day` },
+      { key: "projectedRR", label: "Projected RR", value: `${fmtCurrencyCompact(projectedRR)}/yr`, fullValue: `${fmtCurrencyExact(projectedRR)}/yr` },
       { key: "topBrand", label: "Top Brand", value: topBrand },
     ],
     charts: [
