@@ -243,6 +243,15 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
   }
 
   let receivedDate = new Date(data.receivedAt);
+  if (receivedDate.getTime() > Date.now()) {
+    // GrubCenter's live feed has returned orders timestamped ahead of the
+    // real clock (seen: an order stamped 12:14 AM GST while it was still
+    // 9:44 PM the prior evening) — an order can't have been received in the
+    // future, and left as-is it creates a whole extra "tomorrow" bucket in
+    // day-by-day charts before tomorrow has actually arrived. Clamp to now.
+    console.warn(`[normalize] order ${data.id} has a future receivedAt (${data.receivedAt}) — clamping to now`);
+    receivedDate = new Date();
+  }
   if (data.hour !== undefined) {
     // Date-only column + a separate real hour column — the timestamp's own
     // time-of-day is a meaningless constant, so splice in the real hour.
