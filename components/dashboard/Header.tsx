@@ -3,6 +3,7 @@
 import { CheckCircle2, Circle, AlertCircle, Loader2, Download } from "lucide-react";
 import type { SyncStatusPayload, TabId } from "@/lib/types";
 import { TAB_LABELS } from "@/lib/types";
+import { fmtTimeGst } from "@/lib/format";
 
 interface Props {
   sync: SyncStatusPayload | null;
@@ -31,7 +32,7 @@ export function Header({ sync, onExport, importMessage, activeTab }: Props) {
         <div className="sync-pill">
           <Icon className={`sync-icon ${mode}`} size={14} />
           <span>{label}</span>
-          {sync?.lastSyncedAt && <span>· {new Date(sync.lastSyncedAt).toLocaleTimeString()}</span>}
+          {sync?.lastSyncedAt && <span>· {fmtTimeGst(sync.lastSyncedAt)}</span>}
         </div>
         {importMessage && <span className="panel-caption">{importMessage}</span>}
         <button className="btn btn-secondary" onClick={onExport}>

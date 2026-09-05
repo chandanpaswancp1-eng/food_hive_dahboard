@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { DashboardFilters, DrillThroughRow } from "@/lib/types";
+import { fmtDateTimeGst } from "@/lib/format";
 
 interface Props {
   filters: DashboardFilters;
@@ -97,7 +98,7 @@ export function DrillThroughModal({ filters, scope, onClose }: Props) {
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td>{r.orderNumber}</td>
-                    <td>{new Date(r.receivedAt).toLocaleString()}</td>
+                    <td>{fmtDateTimeGst(r.receivedAt)}</td>
                     <td>{r.brand}</td>
                     <td>{r.location}</td>
                     <td>{r.channel}</td>

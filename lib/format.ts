@@ -34,6 +34,35 @@ export function fmtMinutes(n: number | null | undefined): string {
   return `${n.toFixed(1)}m`;
 }
 
+// This business (and GrubCenter's own reporting) runs on Gulf Standard Time
+// (UTC+4, no DST) — clock times shown to a viewer must be pinned to it
+// explicitly, otherwise `toLocaleString()`/`toLocaleTimeString()` render in
+// whatever timezone the *viewer's* browser happens to be set to (often UTC
+// on a server or a different machine), silently disagreeing with GrubCenter.
+const GST_TIME_ZONE = "Asia/Dubai";
+
+/** Date + time in GST, independent of the viewer's own browser timezone. */
+export function fmtDateTimeGst(value: string | Date): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone: GST_TIME_ZONE,
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(d);
+  return `${formatted} GST`;
+}
+
+/** Time-only in GST, independent of the viewer's own browser timezone. */
+export function fmtTimeGst(value: string | Date): string {
+  const d = typeof value === "string" ? new Date(value) : value;
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone: GST_TIME_ZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(d);
+  return `${formatted} GST`;
+}
+
 export function safeDiv(numerator: number, denominator: number): number {
   return denominator === 0 ? 0 : numerator / denominator;
 }
