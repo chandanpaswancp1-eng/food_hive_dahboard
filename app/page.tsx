@@ -8,6 +8,12 @@ import { DashboardTabView } from "@/components/dashboard/DashboardTabView";
 import { DrillThroughModal } from "@/components/dashboard/DrillThroughModal";
 import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
 
+// Deliberately well under TAB_CACHE_TTL_MS (20s, lib/grubtech/kpis/index.ts)
+// — the cache, not this interval, is what bounds actual DB load, so keeping
+// this fast preserves both a responsive live-data feel and the DB-error
+// self-heal behavior below.
+const DASHBOARD_POLL_INTERVAL_MS = 15_000;
+
 function filtersToParams(filters: DashboardFilters): string {
   const params = new URLSearchParams();
   if (filters.dateFrom) params.set("dateFrom", filters.dateFrom);
@@ -31,16 +37,42 @@ export default function DashboardPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
-  // Network to the DB has been intermittent (a real flaky-connection window,
-  // not a one-off) — a fetch landing exactly during an outage would leave
-  // the page stuck on the error banner forever with nothing to retry it.
-  // This ticks every 15s so both effects below self-heal once the backend
-  // recovers, without the user needing to change tabs/filters.
+  // Drives the auto-refresh effects below (filter options, sync status, tab
+  // data) so the dashboard picks up new data from the 10-minute GrubCenter
+  // sync without a manual reload — and, as a side benefit, self-heals from
+  // the DB's real intermittent-connection windows without the user needing
+  // to change tabs/filters. Paused while the tab is hidden (no point paying
+  // for polls nobody's looking at), and fires one immediate refresh on
+  // return so the view is never more than DASHBOARD_POLL_INTERVAL_MS stale
+  // when the user comes back to it.
   const [retryTick, setRetryTick] = useState(0);
 
   useEffect(() => {
-    const id = setInterval(() => setRetryTick((t) => t + 1), 15000);
-    return () => clearInterval(id);
+    let id: ReturnType<typeof setInterval> | null = null;
+    const start = () => {
+      if (!id) id = setInterval(() => setRetryTick((t) => t + 1), DASHBOARD_POLL_INTERVAL_MS);
+    };
+    const stop = () => {
+      if (id) {
+        clearInterval(id);
+        id = null;
+      }
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        stop();
+      } else {
+        setRetryTick((t) => t + 1);
+        start();
+      }
+    };
+
+    start();
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      stop();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {

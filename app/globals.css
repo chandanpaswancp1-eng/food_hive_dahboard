@@ -593,6 +593,7 @@ select.input {
 
 .sync-icon.live { color: var(--success-500); }
 .sync-icon.local { color: var(--info-500); animation: spin 1s linear infinite; }
+.sync-icon.stale { color: var(--warning-500); }
 .sync-icon.error { color: var(--danger-500); }
 .sync-icon.none { color: var(--neutral-400); }
 

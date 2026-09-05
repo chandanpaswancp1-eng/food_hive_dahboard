@@ -111,7 +111,13 @@ export interface FilterOptions {
 
 export interface SyncStatusPayload {
   mode: "live" | "local" | "error" | "none";
+  /** Which SyncLog source produced `mode`/`message` — lets the UI tell the automated GrubCenter agent apart from a manual CSV import. */
+  source: "grubcenter-live" | "import" | null;
   lastSyncedAt: string | null;
+  /** Minutes since the grubcenter-live agent's last successful run, regardless of `source` — null if it has never succeeded. */
+  minutesSinceSync: number | null;
+  /** Whether the grubcenter-live agent is current (within 2x its 10-minute cadence) — null when mode is "none". */
+  healthy: boolean | null;
   message?: string;
 }
 
