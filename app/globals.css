@@ -2,45 +2,46 @@
   color-scheme: light;
 
   /* surfaces */
-  --color-bg: #f7f5f3;
+  --color-bg: #fbf9f7;
   --color-surface: #ffffff;
-  --color-surface-2: #f1ede9;
-  --color-border: #e6e1dd;
-  --color-text: #201e1d;
-  --color-text-muted: #6a6462;
+  --color-surface-2: #f6f2ee;
+  --color-border: #ece6e0;
+  --color-text: #211f1e;
+  --color-text-muted: #726b68;
 
-  /* primary — the real FoodHive brand gold (#EDAE00, sampled from the logo) */
-  --primary-50: #fff8e6;
-  --primary-100: #fdedc0;
-  --primary-200: #fbdd8a;
-  --primary-300: #f7c94f;
-  --primary-400: #f2ba1f;
-  --primary-500: #edae00;
-  --primary-600: #c99300;
-  --primary-700: #a67900;
-  --primary-800: #7d5c00;
-  --primary-900: #4d3800;
+  /* primary — warmer, richer amber-orange (still the FoodHive gold family,
+     shifted away from mustard/olive for a more vibrant, attractive accent) */
+  --primary-50: #fff7e6;
+  --primary-100: #ffeac2;
+  --primary-200: #ffd583;
+  --primary-300: #ffbc47;
+  --primary-400: #fca61f;
+  --primary-500: #f79009;
+  --primary-600: #d97706;
+  --primary-700: #b45f04;
+  --primary-800: #854503;
+  --primary-900: #522a02;
   --color-primary: var(--primary-500);
   --color-primary-hover: var(--primary-600);
-  /* gold reads poorly with white text at any weight — pair it with dark text */
-  --color-on-primary: #1a1712;
+  /* this hue reads poorly with white text at any weight — pair it with dark text */
+  --color-on-primary: #201400;
 
   /* secondary — complementary teal, used for non-alarming accents so the
      dashboard reads as colourful, not just monochrome gold+black */
-  --secondary-50: #eafbfc;
-  --secondary-100: #cdf4f6;
-  --secondary-200: #9de8ec;
-  --secondary-300: #62d3da;
-  --secondary-400: #2fb3bd;
-  --secondary-500: #0e93a0;
-  --secondary-600: #0b7580;
-  --secondary-700: #0a5d66;
+  --secondary-50: #eafcfc;
+  --secondary-100: #c8f6f7;
+  --secondary-200: #8fe9ec;
+  --secondary-300: #4fd2d8;
+  --secondary-400: #1fb3bb;
+  --secondary-500: #0aa1ab;
+  --secondary-600: #078089;
+  --secondary-700: #066169;
   --color-secondary: var(--secondary-500);
 
   /* tertiary — a third accent hue, gives KPI badges/charts more variety */
-  --tertiary-100: #ede9fe;
-  --tertiary-500: #6366f1;
-  --tertiary-700: #4338ca;
+  --tertiary-100: #ece9fe;
+  --tertiary-500: #6d5ff5;
+  --tertiary-700: #4735c9;
 
   /* semantic */
   --success-100: #e3f6ea;
@@ -68,12 +69,12 @@
   --neutral-900: #2d2b2b;
 
   /* chart palette — brand gold leads, rest stay distinct in hue/lightness */
-  --chart-1: #edae00;
-  --chart-2: #0e93a0;
-  --chart-3: #6366f1;
+  --chart-1: #f79009;
+  --chart-2: #0aa1ab;
+  --chart-3: #6d5ff5;
   --chart-4: #c2255c;
   --chart-5: #1f9d63;
-  --chart-6: #201e1d;
+  --chart-6: #211f1e;
   --chart-7: #52667a;
   --chart-8: #b45309;
 
@@ -97,7 +98,7 @@
   --shadow-md: 0 4px 10px rgba(32, 30, 29, 0.08), 0 2px 4px rgba(32, 30, 29, 0.06);
   --shadow-lg: 0 12px 24px rgba(32, 30, 29, 0.14), 0 4px 8px rgba(32, 30, 29, 0.08);
 
-  --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23605d5d' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+  --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23726b68' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 }
 
 [data-theme="dark"] {
