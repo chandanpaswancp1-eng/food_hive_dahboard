@@ -113,7 +113,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
 }
 
 /** Runs `fn` over `items` with at most `concurrency` in flight at once. */
-async function runWithConcurrency<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
+export async function runWithConcurrency<T>(items: T[], concurrency: number, fn: (item: T) => Promise<void>) {
   let cursor = 0;
   async function worker() {
     while (cursor < items.length) {

@@ -179,6 +179,10 @@ model StockoutEvent {
 
   createdAt           DateTime  @default(now())
 
+  // Lets ingestion upsert by these four fields instead of creating a
+  // duplicate row every time the live sync/reconciliation re-fetches an
+  // overlapping window for the same "Unavailable" event.
+  @@unique([itemName, brandId, locationId, markedUnavailableAt])
   @@index([markedUnavailableAt, brandId, locationId])
 }
 

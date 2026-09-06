@@ -112,6 +112,37 @@ export async function fetchLiveOrders(from: Date, to: Date): Promise<Record<stri
   return [...merged.values()];
 }
 
+/**
+ * The "86'd"/sold-out items feed — a log of individual Unavailable/Available
+ * events per menu item, distinct from the order-shaped endpoints above (no
+ * merging/orderKey involved; ingestStockouts.ts does its own item+brand+
+ * location pairing). Confirmed via direct probing: POST, same
+ * timezone/from/to/limit/offset shape as the other endpoints.
+ */
+export async function fetchItemAvailabilityLog(from: Date, to: Date): Promise<Record<string, unknown>[]> {
+  const token = await getGrubCenterToken();
+  const rows = await fetchPaginated("/operations-data/item-availability/item-availability-log", from, to, token);
+  return rows as Record<string, unknown>[];
+}
+
+/** Chunked equivalent of fetchItemAvailabilityLog, for the same reason fetchLiveOrdersChunked exists. */
+export async function fetchItemAvailabilityLogChunked(
+  from: Date,
+  to: Date,
+  chunkDays: number = RECONCILE_CHUNK_DAYS,
+): Promise<Record<string, unknown>[]> {
+  const chunkMs = chunkDays * 24 * 60 * 60_000;
+  const all: Record<string, unknown>[] = [];
+  let cursor = from.getTime();
+  while (cursor < to.getTime()) {
+    const chunkFrom = new Date(cursor);
+    const chunkTo = new Date(Math.min(cursor + chunkMs, to.getTime()));
+    all.push(...(await fetchItemAvailabilityLog(chunkFrom, chunkTo)));
+    cursor += chunkMs;
+  }
+  return all;
+}
+
 // A single fetchLiveOrders call spanning many weeks has been observed to
 // silently return incomplete/mismatched data — verified by comparing a
 // wide single-range fetch against several 3-day chunked fetches of the same

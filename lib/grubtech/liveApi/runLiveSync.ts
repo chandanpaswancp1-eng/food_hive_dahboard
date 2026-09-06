@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import { fetchLiveOrders } from "./fetchOrders";
+import { fetchLiveOrders, fetchItemAvailabilityLog } from "./fetchOrders";
 import { ingestRawOrders } from "@/lib/grubtech/ingest";
+import { ingestItemAvailabilityEvents } from "@/lib/grubtech/ingestStockouts";
 import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
 import { invalidateTabCache } from "@/lib/grubtech/kpis";
 
@@ -64,24 +65,34 @@ export async function runLiveSync(): Promise<{ recordsIngested: number; issues: 
         ? new Date(Math.max(watermarkFrom.getTime(), minFrom.getTime()))
         : rollingFrom;
 
-    const rawOrders = await fetchLiveOrders(from, to);
+    const [rawOrders, rawStockoutEvents] = await Promise.all([
+      fetchLiveOrders(from, to),
+      fetchItemAvailabilityLog(from, to),
+    ]);
+    // Sequential, not parallel — both hit the DB pool hard (Supabase's
+    // pgbouncer pool is small; real imports have silently dropped rows under
+    // concurrent load before, per ingest.ts's INGEST_CONCURRENCY comment).
     const result = await ingestRawOrders(rawOrders);
+    const stockoutResult = await ingestItemAvailabilityEvents(rawStockoutEvents);
 
     invalidateDimensionCache();
     invalidateTabCache();
+
+    const recordsIngested = result.ingested + stockoutResult.ingested;
+    const issues = [...result.issues, ...stockoutResult.issues];
 
     await prisma.syncLog.update({
       where: { id: job.id },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
-        recordsIngested: result.ingested,
+        recordsIngested,
         windowTo: to,
-        errorMessage: result.issues.length ? result.issues.slice(0, 20).join(" | ") : null,
+        errorMessage: issues.length ? issues.slice(0, 20).join(" | ") : null,
       },
     });
 
-    return { recordsIngested: result.ingested, issues: result.issues };
+    return { recordsIngested, issues };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await prisma.syncLog.update({

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
-import { fetchLiveOrdersChunked } from "./fetchOrders";
+import { fetchLiveOrdersChunked, fetchItemAvailabilityLogChunked } from "./fetchOrders";
 import { ingestRawOrders } from "@/lib/grubtech/ingest";
+import { ingestItemAvailabilityEvents } from "@/lib/grubtech/ingestStockouts";
 import { normalizeRawOrder } from "@/lib/grubtech/normalize";
 import { invalidateDimensionCache } from "@/lib/grubtech/kpis/shared";
 import { invalidateTabCache } from "@/lib/grubtech/kpis";
@@ -30,6 +31,7 @@ export interface ReconciliationResult {
   ingested: number;
   grubCenterCount: number;
   dbCount: number;
+  stockoutEventsProcessed: number;
 }
 
 export async function runReconciliation(): Promise<ReconciliationResult> {
@@ -38,7 +40,7 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
     where: { source: SOURCE, status: "RUNNING", startedAt: { gt: staleThreshold } },
   });
   if (runningLock) {
-    return { drifted: false, ingested: 0, grubCenterCount: 0, dbCount: 0 };
+    return { drifted: false, ingested: 0, grubCenterCount: 0, dbCount: 0, stockoutEventsProcessed: 0 };
   }
 
   const job = await prisma.syncLog.create({ data: { source: SOURCE, status: "RUNNING" } });
@@ -47,7 +49,15 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
     const to = new Date();
     const from = new Date(to.getTime() - RECONCILE_WINDOW_DAYS * 24 * 60 * 60_000);
 
-    const rawOrders = await fetchLiveOrdersChunked(from, to);
+    const [rawOrders, rawStockoutEvents] = await Promise.all([
+      fetchLiveOrdersChunked(from, to),
+      fetchItemAvailabilityLogChunked(from, to),
+    ]);
+
+    // Unlike orders, this needs no drift check first — the pairing logic in
+    // ingestItemAvailabilityEvents is naturally idempotent (an already-closed
+    // "Available" event just no-ops), so it's cheap enough to always run.
+    const stockoutResult = await ingestItemAvailabilityEvents(rawStockoutEvents);
 
     let grubCenterCount = 0;
     let grubCenterNetSales = 0;
@@ -74,26 +84,29 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
     if (drifted) {
       const result = await ingestRawOrders(rawOrders);
       ingested = result.ingested;
-      invalidateDimensionCache();
-      invalidateTabCache();
     }
+    // Cheap in-memory clears — always run so a new brand/location from
+    // either source, or a stockout-only change, isn't left stale.
+    invalidateDimensionCache();
+    invalidateTabCache();
 
-    const message = drifted
+    const orderSummary = drifted
       ? `drift detected over last ${RECONCILE_WINDOW_DAYS}d — DB had ${dbCount} orders/AED ${dbNetSales.toFixed(2)}, GrubCenter had ${grubCenterCount}/AED ${grubCenterNetSales.toFixed(2)} — re-ingested ${ingested}`
       : `in sync — ${dbCount} orders, AED ${dbNetSales.toFixed(2)}, no drift over last ${RECONCILE_WINDOW_DAYS}d`;
+    const message = `${orderSummary} | stockout events processed: ${stockoutResult.ingested}${stockoutResult.issues.length ? ` (${stockoutResult.issues.length} issues)` : ""}`;
 
     await prisma.syncLog.update({
       where: { id: job.id },
       data: {
         status: "SUCCESS",
         finishedAt: new Date(),
-        recordsIngested: ingested,
+        recordsIngested: ingested + stockoutResult.ingested,
         windowTo: to,
         errorMessage: message,
       },
     });
 
-    return { drifted, ingested, grubCenterCount, dbCount };
+    return { drifted, ingested, grubCenterCount, dbCount, stockoutEventsProcessed: stockoutResult.ingested };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     await prisma.syncLog.update({

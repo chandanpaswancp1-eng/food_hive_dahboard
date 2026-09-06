@@ -62,7 +62,7 @@ export function startReconciliationScheduler() {
     runReconciliation()
       .then((result) => {
         console.log(
-          `[grubcenter-reconcile] ${result.drifted ? `drift fixed (${result.ingested} re-ingested)` : "in sync"} — DB ${result.dbCount} vs GrubCenter ${result.grubCenterCount}`,
+          `[grubcenter-reconcile] ${result.drifted ? `drift fixed (${result.ingested} re-ingested)` : "in sync"} — DB ${result.dbCount} vs GrubCenter ${result.grubCenterCount}, ${result.stockoutEventsProcessed} stockout events processed`,
         );
       })
       .catch((err) => {
