@@ -186,6 +186,13 @@ function minutesBetween(a?: string, b?: string): number | null {
   return Math.round(((end - start) / 60000) * 100) / 100;
 }
 
+// Stand-in for GrubCenter's missing "estimated prep time" — see the comment
+// at its use site in normalizeRawOrder. Kitchen "Started → Prepared" time
+// (the real, observed duration) has averaged ~8-9 minutes on real data seen
+// so far; 15 gives orders room to run long before counting as delayed
+// without being so loose it never fires.
+export const DELAY_THRESHOLD_MINUTES = 15;
+
 const TIME_SLOTS: [number, number, string][] = [
   [6, 11, "Breakfast"],
   [11, 15, "Lunch"],
@@ -268,15 +275,29 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
   const durReceivingToDispatched = minutesBetween(receivedAtIso, data.dispatchedAt);
   const durReceivedToDelivered = minutesBetween(receivedAtIso, data.deliveredAt);
 
+  // GrubCenter's live feed never carries a real "estimated prep time" —
+  // confirmed absent from every live report endpoint, including the one
+  // whose own UI shows aggregate prep/dispatch/delivery averages computed
+  // from these exact same timestamps. A fixed threshold stands in for it so
+  // "delayed" still means something without needing a per-item estimate
+  // GrubCenter doesn't expose. A CSV import that genuinely carries
+  // estimated_prep_time/actual_prep_time columns still wins over these
+  // fallbacks (??, not the reverse) — this only fills the gap when the
+  // source is silent, exactly like the live sync's cancellation-status fix.
+  const actualPrepTime = data.actualPrepTime ?? durStartedToPrep ?? undefined;
+  const estimatedPrepTime = data.estimatedPrepTime ?? (actualPrepTime !== undefined ? DELAY_THRESHOLD_MINUTES : undefined);
+
   const delayMinutes =
-    data.actualPrepTime !== undefined && data.estimatedPrepTime !== undefined
-      ? Math.round((data.actualPrepTime - data.estimatedPrepTime) * 100) / 100
+    actualPrepTime !== undefined && estimatedPrepTime !== undefined
+      ? Math.round((actualPrepTime - estimatedPrepTime) * 100) / 100
       : null;
 
   return {
     ok: true,
     order: {
       ...data,
+      actualPrepTime,
+      estimatedPrepTime,
       receivedAt: receivedAtIso,
       durations: {
         durAccToStarted,
@@ -293,7 +314,9 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
         timeSlot: timeSlotFor(hour),
         timeOfDay: timeOfDayFor(hour),
       },
-      isDelayed: delayMinutes !== null ? delayMinutes > 10 : false,
+      // delayMinutes is actual minus the threshold/estimate — positive at
+      // all means it exceeded DELAY_THRESHOLD_MINUTES, no extra buffer needed.
+      isDelayed: delayMinutes !== null ? delayMinutes > 0 : false,
       delayMinutes,
     },
   };

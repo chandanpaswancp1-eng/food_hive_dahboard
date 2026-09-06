@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
 import { fmtMinutes, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
+import { DELAY_THRESHOLD_MINUTES } from "@/lib/grubtech/normalize";
 
 export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
   const completedWhere: Prisma.OrderWhereInput = { ...where, status: "COMPLETED" };
@@ -94,13 +95,13 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
       { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders), fullValue: fmtNumber(totalOrders) },
       {
         key: "delayedOrders",
-        label: "Delayed Orders (>10m)",
+        label: `Delayed Orders (>${DELAY_THRESHOLD_MINUTES}m)`,
         value: fmtNumberCompact(delayedOrders),
         fullValue: fmtNumber(delayedOrders),
         subtitle: fmtPercent(delayRate),
         accent: true,
       },
-      { key: "delayRate", label: "> 10 Minutes %", value: fmtPercent(delayRate) },
+      { key: "delayRate", label: `> ${DELAY_THRESHOLD_MINUTES} Minutes %`, value: fmtPercent(delayRate) },
       { key: "avgPrep", label: "Avg Prep Time", value: fmtMinutes(avgPrep) },
       { key: "onTime", label: "On-Time Compliance", value: fmtPercent(onTimeCompliance) },
       { key: "worstBrand", label: "Worst Brand", value: worstBrand },
@@ -108,7 +109,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
     charts: [
       {
         id: "completed-vs-delayed-by-brand",
-        title: "Completed vs Delayed (>10min) by Brand",
+        title: `Completed vs Delayed (>${DELAY_THRESHOLD_MINUTES}min) by Brand`,
         type: "bar",
         dimension: "brand",
         labels: brandRows.map((b) => b.brand),
@@ -119,7 +120,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
       },
       {
         id: "completed-vs-delayed-by-location",
-        title: "Completed vs Delayed (>10min) by Branch",
+        title: `Completed vs Delayed (>${DELAY_THRESHOLD_MINUTES}min) by Branch`,
         type: "bar",
         dimension: "location",
         labels: locationRows.map((l) => l.location),
@@ -130,12 +131,13 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
       },
       {
         id: "prep-time-vs-estimated",
-        title: "Vendor Preparation Time vs Estimated",
+        title: "Vendor Preparation Time vs Target",
+        caption: `GrubCenter doesn't expose a per-item estimate — "Target" is a fixed ${DELAY_THRESHOLD_MINUTES}min benchmark, not a real per-brand figure.`,
         type: "bar",
         dimension: "brand",
         labels: prepRows.map((p) => p.brand),
         datasets: [
-          { label: "Estimated", data: prepRows.map((p) => p.estimated), kind: "bar" },
+          { label: "Target", data: prepRows.map((p) => p.estimated), kind: "bar" },
           { label: "Actual", data: prepRows.map((p) => p.actual), kind: "bar" },
         ],
       },
