@@ -140,13 +140,12 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
   const rawDiscountPercent = receiptTotal > 0 ? (discountAmount / receiptTotal) * 100 : 0;
   const discountPercent = Math.round(Math.min(rawDiscountPercent, 999.99) * 100) / 100;
 
-  const data: Prisma.OrderUncheckedCreateInput = {
+  const data: Omit<Prisma.OrderUncheckedCreateInput, "status" | "isPostCancelled" | "cancellationReasonId"> = {
     externalId: String(order.id),
     orderNumber: String(order.orderNumber ?? order.id),
     brandId,
     locationId,
     channelId,
-    cancellationReasonId,
     receivedAt: new Date(order.receivedAt),
     receivedDateKey: dubaiDateKey(new Date(order.receivedAt)),
     acceptedAt: order.acceptedAt ? new Date(order.acceptedAt) : null,
@@ -166,8 +165,6 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     discountAmount,
     discountPercent,
     paymentMethod: order.paymentMethod,
-    status: toOrderStatus(order.status),
-    isPostCancelled: order.isPostCancelled ?? false,
     deliveryPartner: order.deliveryPartner,
     dayName: order.calendar.dayName,
     dayOfWeek: order.calendar.dayOfWeek,
@@ -180,10 +177,26 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     isDelayed: order.isDelayed,
   };
 
+  // Cancellation info (status/isPostCancelled/cancellationReasonId) is kept
+  // out of `data` above and only ever set explicitly — GrubCenter's live
+  // report endpoints carry no status field at all, so `order.status` is
+  // always undefined there. Including these in the shared update payload
+  // meant every 10-minute live sync tick (and the hourly reconciliation
+  // job) silently flipped an already-CANCELLED order (set by a manual CSV
+  // import, the only source that does carry status) back to COMPLETED the
+  // next time it re-touched that row. A status-blind source may set sane
+  // defaults on a brand-new row, but must never downgrade an existing one.
+  const cancellationFields = {
+    status: toOrderStatus(order.status),
+    isPostCancelled: order.isPostCancelled ?? false,
+    cancellationReasonId,
+  };
+  const hasExplicitStatus = order.status !== undefined;
+
   const saved = await prisma.order.upsert({
     where: { externalId: data.externalId },
-    create: data,
-    update: data,
+    create: { ...data, ...cancellationFields },
+    update: hasExplicitStatus ? { ...data, ...cancellationFields } : data,
   });
 
   if (order.items?.length) {
