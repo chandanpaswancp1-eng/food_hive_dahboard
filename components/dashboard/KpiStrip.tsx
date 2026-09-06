@@ -3,12 +3,16 @@ import type { KpiValue, TabId } from "@/lib/types";
 import { TAB_ICONS } from "@/lib/tabIcons";
 
 // Rotates non-danger KPI cards through the brand's accent hues so the strip
-// reads as colourful rather than one repeated tint.
+// reads as colourful rather than one repeated tint. Five distinct hues (not
+// four) so a full 8-9 card tab (e.g. Order Details) doesn't repeat the same
+// colour on an adjacent card two rows down — e.g. Gross Sales and Total
+// Discount previously both landed on tone 0 (primary/gold).
 const TONE_CYCLE: { border: string; bg: string; fg: string }[] = [
   { border: "var(--primary-500)", bg: "var(--primary-100)", fg: "var(--primary-700)" },
   { border: "var(--secondary-500)", bg: "var(--secondary-100)", fg: "var(--secondary-700)" },
   { border: "var(--tertiary-500)", bg: "var(--tertiary-100)", fg: "var(--tertiary-700)" },
   { border: "var(--success-500)", bg: "var(--success-100)", fg: "var(--success-700)" },
+  { border: "var(--info-500)", bg: "var(--info-100)", fg: "var(--info-700)" },
 ];
 
 export function KpiStrip({ kpis, activeTab }: { kpis: KpiValue[]; activeTab: TabId }) {

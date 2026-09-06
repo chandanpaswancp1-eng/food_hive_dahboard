@@ -393,7 +393,14 @@ button, input, select {
   font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
-  white-space: nowrap;
+  /* Numeric/currency values are always short and never wrap in practice —
+     this exists for text values (Top Brand, Worst Channel, etc.), which
+     used to hard-truncate to a single line ("Manakeesh C...") with no way
+     to read the rest short of hovering. Wrapping to 2 lines shows the full
+     name in the common case; only a genuinely long one still ellipsizes. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
   text-overflow: ellipsis;
 }
