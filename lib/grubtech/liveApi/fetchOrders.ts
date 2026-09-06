@@ -54,25 +54,55 @@ function orderKey(row: Record<string, unknown>): string | null {
 }
 
 /**
- * Pulls both live GrubCenter report endpoints for the window and merges them
- * per order into one record ready for normalizeRawOrder/ingestRawOrders.
- * The two endpoints cover disjoint field sets (timing vs financial) — a
- * record missing one side (e.g. financial data lands a beat after timing
- * data) still gets returned, and normalizeRawOrder's required-field
- * validation naturally skips/reports it until a later tick's overlap window
- * picks up the completed record.
+ * The cancelled-orders report uses the opposite id convention from the other
+ * two endpoints: its own `orderId` is the short POS code and `uniqueOrderId`
+ * is the long globally-unique id. Remapped here so the merged row's `orderId`
+ * means the same thing everywhere (the long id — see orderKey above), and so
+ * its other fields land under names normalizeRawOrder's ALIASES already
+ * recognize (e.g. "Sales Amount"/"Sales After Tax", the exact labels
+ * GrubCenter's own Cancelled Orders report uses for these two figures) —
+ * no changes needed in normalize.ts itself.
+ */
+function normalizeCancelledRow(raw: unknown): Record<string, unknown> {
+  const row = raw as Record<string, unknown>;
+  return {
+    ...row,
+    orderId: row.uniqueOrderId,
+    orderNumber: row.orderId,
+    receivedAt: row.date,
+    "Sales Amount": row.grossAmount,
+    "Sales After Tax": row.netAmount,
+    "Order Status": "Cancelled",
+    "Post Cancelled": row.postCancelled,
+    deliveryPartner: row.cancellationSource,
+  };
+}
+
+/**
+ * Pulls all three live GrubCenter report endpoints for the window and merges
+ * them per order into one record ready for normalizeRawOrder/ingestRawOrders.
+ * The financial/timing endpoints cover disjoint field sets for
+ * active/completed orders — a record missing one side (e.g. financial data
+ * lands a beat after timing data) still gets returned, and
+ * normalizeRawOrder's required-field validation naturally skips/reports it
+ * until a later tick's overlap window picks up the completed record. The
+ * cancelled-orders endpoint is normally self-sufficient (a cancelled order
+ * doesn't need the other two to satisfy NormalizedOrderInput's required
+ * fields) but still merges into the same map in case the same order id
+ * appears in more than one source.
  */
 export async function fetchLiveOrders(from: Date, to: Date): Promise<Record<string, unknown>[]> {
   const token = await getGrubCenterToken();
 
-  const [timingRows, financialRows] = await Promise.all([
+  const [timingRows, financialRows, cancelledRows] = await Promise.all([
     fetchPaginated("/operations-data/location-performance/report", from, to, token),
     fetchPaginated("/sales-data/order-details", from, to, token),
+    fetchPaginated("/sales-data/cancelled-orders/report", from, to, token),
   ]);
 
   const merged = new Map<string, Record<string, unknown>>();
 
-  for (const raw of [...timingRows, ...financialRows]) {
+  for (const raw of [...timingRows, ...financialRows, ...cancelledRows.map(normalizeCancelledRow)]) {
     const row = raw as Record<string, unknown>;
     const key = orderKey(row);
     if (!key) continue;
