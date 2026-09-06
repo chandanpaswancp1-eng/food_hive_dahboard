@@ -33,6 +33,7 @@ export default function DashboardPage() {
   const [payload, setPayload] = useState<TabPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
+  const [todayGst, setTodayGst] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
@@ -101,6 +102,16 @@ export default function DashboardPage() {
   }, [loadSyncStatus, retryTick]);
 
   useEffect(() => {
+    // Re-fetched on the same tick as everything else so the "Today" button
+    // keeps pointing at the right GST date even if the page is left open
+    // across a Dubai midnight rollover.
+    fetch("/api/today")
+      .then((r) => r.json())
+      .then((data) => setTodayGst(data.todayGst))
+      .catch(() => {});
+  }, [retryTick]);
+
+  useEffect(() => {
     let cancelled = false;
     fetch(`/api/kpis/${activeTab}?${filtersToParams(filters)}`)
       .then(async (r) => {
@@ -132,6 +143,11 @@ export default function DashboardPage() {
   const updateTab = (next: TabId) => {
     setLoading(true);
     setActiveTab(next);
+  };
+
+  const applyToday = () => {
+    if (!todayGst) return;
+    updateFilters({ ...filters, dateFrom: todayGst, dateTo: todayGst });
   };
 
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
@@ -195,6 +211,8 @@ export default function DashboardPage() {
           options={options}
           onChange={updateFilters}
           onReset={() => updateFilters({})}
+          todayGst={todayGst}
+          onToday={applyToday}
           scopeLabel={payload ? `${payload.scope.orderCount} orders in scope` : "Loading feed…"}
         />
         <main className="dashboard-main">

@@ -87,8 +87,8 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
   // netSales / orders (12,238.50 / 276 = 44.34) does not match it.
   const aov = safeDiv(grossSales, totalOrders);
 
-  const days = byDateGroups.length || 1;
-  const avgRunRate = netSales / days;
+  const distinctDays = byDateGroups.length;
+  const avgRunRate = netSales / (distinctDays || 1);
   const projectedRR = avgRunRate * 365;
 
   const brandRows = sortDesc(
@@ -186,8 +186,26 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
       { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
       { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
       { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
-      { key: "runRate", label: "Avg Run Rate", value: `${fmtCurrencyCompact(avgRunRate)}/day`, fullValue: `${fmtCurrencyExact(avgRunRate)}/day` },
-      { key: "projectedRR", label: "Projected RR", value: `${fmtCurrencyCompact(projectedRR)}/yr`, fullValue: `${fmtCurrencyExact(projectedRR)}/yr` },
+      // A single-day range (e.g. the "Today" filter) makes these redundant/
+      // misleading: avgRunRate collapses to exactly netSales, and
+      // projectedRR becomes a naive x365 extrapolation of one day's sales.
+      // Only meaningful once the range actually spans more than one day.
+      ...(distinctDays > 1
+        ? [
+            {
+              key: "runRate",
+              label: "Avg Run Rate",
+              value: `${fmtCurrencyCompact(avgRunRate)}/day`,
+              fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
+            },
+            {
+              key: "projectedRR",
+              label: "Projected RR",
+              value: `${fmtCurrencyCompact(projectedRR)}/yr`,
+              fullValue: `${fmtCurrencyExact(projectedRR)}/yr`,
+            },
+          ]
+        : []),
       { key: "topBrand", label: "Top Brand", value: topBrand },
     ],
     charts: [

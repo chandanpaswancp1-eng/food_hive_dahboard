@@ -1,6 +1,6 @@
 "use client";
 
-import { RotateCcw } from "lucide-react";
+import { CalendarCheck, RotateCcw } from "lucide-react";
 import type { DashboardFilters, FilterOptions } from "@/lib/types";
 
 interface Props {
@@ -8,6 +8,9 @@ interface Props {
   options: FilterOptions | null;
   onChange: (next: DashboardFilters) => void;
   onReset: () => void;
+  /** Current GST calendar date ("YYYY-MM-DD"), from /api/today — null until the first fetch resolves. */
+  todayGst: string | null;
+  onToday: () => void;
   scopeLabel: string;
 }
 
@@ -37,7 +40,7 @@ function Select({
   );
 }
 
-export function FilterBar({ filters, options, onChange, onReset, scopeLabel }: Props) {
+export function FilterBar({ filters, options, onChange, onReset, todayGst, onToday, scopeLabel }: Props) {
   const setSingle = (key: keyof DashboardFilters, value: string) => {
     onChange({ ...filters, [key]: value ? [value] : undefined });
   };
@@ -72,6 +75,10 @@ export function FilterBar({ filters, options, onChange, onReset, scopeLabel }: P
         options={options?.paymentMethods ?? []}
         onChange={(v) => setSingle("paymentMethods", v)}
       />
+      <button className="btn btn-ghost" onClick={onToday} disabled={!todayGst}>
+        <CalendarCheck size={14} />
+        Today
+      </button>
       <button className="btn btn-ghost" onClick={onReset}>
         <RotateCcw size={14} />
         Reset

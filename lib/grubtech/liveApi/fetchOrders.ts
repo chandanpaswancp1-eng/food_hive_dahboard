@@ -81,3 +81,41 @@ export async function fetchLiveOrders(from: Date, to: Date): Promise<Record<stri
 
   return [...merged.values()];
 }
+
+// A single fetchLiveOrders call spanning many weeks has been observed to
+// silently return incomplete/mismatched data — verified by comparing a
+// wide single-range fetch against several 3-day chunked fetches of the same
+// period, where the chunked version recovered the full, correct order set
+// every time and the wide call did not. The live sync's own ~30-minute
+// window is far too narrow to ever hit this, but the reconciliation job
+// (runReconciliation.ts) needs a reliable 30-day lookback, hence this.
+const RECONCILE_CHUNK_DAYS = 3;
+
+/**
+ * Fetches a wide date range reliably by paging through it in small windows
+ * and merging the results by order key — see the note above for why a
+ * single wide-range fetchLiveOrders call isn't trustworthy at this size.
+ */
+export async function fetchLiveOrdersChunked(
+  from: Date,
+  to: Date,
+  chunkDays: number = RECONCILE_CHUNK_DAYS,
+): Promise<Record<string, unknown>[]> {
+  const chunkMs = chunkDays * 24 * 60 * 60_000;
+  const merged = new Map<string, Record<string, unknown>>();
+
+  let cursor = from.getTime();
+  while (cursor < to.getTime()) {
+    const chunkFrom = new Date(cursor);
+    const chunkTo = new Date(Math.min(cursor + chunkMs, to.getTime()));
+    const rows = await fetchLiveOrders(chunkFrom, chunkTo);
+    for (const row of rows) {
+      const key = orderKey(row);
+      if (!key) continue;
+      merged.set(key, { ...(merged.get(key) ?? {}), ...row });
+    }
+    cursor += chunkMs;
+  }
+
+  return [...merged.values()];
+}
