@@ -407,6 +407,16 @@ button, input, select {
 
 .kpi-value.accent { color: var(--danger-500); }
 
+/* The exact figure behind a compacted kpi-value (e.g. "AED 5,185.91" under
+   "AED 5.2K") — deliberately plainer than kpi-subtitle (no margin-top of
+   its own; subtitle's margin already separates them when both are present)
+   since it's a precise restatement of the value above it, not new context. */
+.kpi-full-value {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-muted);
+}
+
 .kpi-subtitle {
   margin-top: var(--space-1);
   font-size: 12px;

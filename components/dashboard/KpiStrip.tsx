@@ -45,6 +45,10 @@ export function KpiStrip({ kpis, activeTab }: { kpis: KpiValue[]; activeTab: Tab
               <div className={`kpi-value${k.accent ? " accent" : ""}`} title={k.fullValue ?? k.value}>
                 {k.value}
               </div>
+              {/* Exact figure behind a compacted value (e.g. "AED 5.2K")
+                  shown outright — a hover-only tooltip is invisible on
+                  touch devices, where there's no hover at all. */}
+              {k.fullValue && k.fullValue !== k.value && <div className="kpi-full-value">{k.fullValue}</div>}
               {k.subtitle && <div className="kpi-subtitle">{k.subtitle}</div>}
             </div>
           </div>
