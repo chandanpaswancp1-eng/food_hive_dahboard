@@ -57,7 +57,17 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
     // Unlike orders, this needs no drift check first — the pairing logic in
     // ingestItemAvailabilityEvents is naturally idempotent (an already-closed
     // "Available" event just no-ops), so it's cheap enough to always run.
-    const stockoutResult = await ingestItemAvailabilityEvents(rawStockoutEvents);
+    // Isolated in its own try/catch: a failure here (e.g. a transient DB
+    // blip during brand/location resolution — this exact scenario crashed a
+    // real reconciliation run and skipped the order-drift check below for
+    // almost an hour) must never abort the order-side check that follows,
+    // since that's the more important safety net of the two.
+    let stockoutResult: { ingested: number; issues: string[] } = { ingested: 0, issues: [] };
+    try {
+      stockoutResult = await ingestItemAvailabilityEvents(rawStockoutEvents);
+    } catch (error) {
+      stockoutResult = { ingested: 0, issues: [error instanceof Error ? error.message : String(error)] };
+    }
 
     let grubCenterCount = 0;
     let grubCenterNetSales = 0;

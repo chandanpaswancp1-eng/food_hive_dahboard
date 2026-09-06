@@ -88,6 +88,7 @@ function toOrderStatus(raw?: string): OrderStatus {
 const TRANSIENT_ERROR_HINTS = [
   "can't reach database server",
   "connection terminated",
+  "server has closed the connection",
   "econnreset",
   "etimedout",
   "timed out",
@@ -98,7 +99,7 @@ function isTransientError(error: unknown): boolean {
   return TRANSIENT_ERROR_HINTS.some((hint) => message.includes(hint));
 }
 
-async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
+export async function withRetry<T>(fn: () => Promise<T>, attempts = 5): Promise<T> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
