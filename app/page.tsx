@@ -234,7 +234,9 @@ export default function DashboardPage() {
           )}
         </main>
       </div>
-      {drillScope && <DrillThroughModal filters={filters} scope={drillScope} onClose={() => setDrillScope(null)} />}
+      {drillScope && (
+        <DrillThroughModal filters={filters} scope={drillScope} tab={activeTab} onClose={() => setDrillScope(null)} />
+      )}
     </div>
   );
 }

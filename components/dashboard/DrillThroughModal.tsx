@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { DashboardFilters, DrillThroughRow } from "@/lib/types";
+import type { DashboardFilters, DrillThroughRow, TabId } from "@/lib/types";
 import { fmtDateTimeGst } from "@/lib/format";
 
 interface Props {
   filters: DashboardFilters;
   scope: Partial<DashboardFilters>;
+  tab: TabId;
   onClose: () => void;
 }
 
@@ -34,7 +35,7 @@ function describeScope(scope: Partial<DashboardFilters>): string | null {
   return parts.length ? parts.join(" · ") : null;
 }
 
-export function DrillThroughModal({ filters, scope, onClose }: Props) {
+export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
   const [rows, setRows] = useState<DrillThroughRow[]>([]);
   const [loading, setLoading] = useState(true);
   const effectiveFilters: DashboardFilters = { ...filters, ...scope };
@@ -47,7 +48,11 @@ export function DrillThroughModal({ filters, scope, onClose }: Props) {
     // No setLoading(true) here: the modal always mounts fresh per open (page.tsx
     // conditionally renders it), so the initial `useState(true)` already covers it.
     let cancelled = false;
-    fetch(`/api/orders?${queryKey}`)
+    // `tab` tells the API which status filter to apply — without it, this
+    // list (and its header count) disagreed with the KPI card that opened
+    // it: Order Details said "18 orders" (completed-only) while a date-bar
+    // drill-through said "19" because it included the cancelled order too.
+    fetch(`/api/orders?${queryKey}&tab=${tab}`)
       .then((r) => r.json())
       .then((data) => {
         if (!cancelled) setRows(data.rows ?? []);
