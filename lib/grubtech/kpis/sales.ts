@@ -6,15 +6,19 @@ import { num, sortDesc, loadDimensionMaps } from "./shared";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
-  // GrubCenter's own Net Sales/Total Orders figures count every order in the
-  // period regardless of status — cancelled orders still carry a netSales
-  // value there. Matching that (rather than filtering to COMPLETED) is what
-  // keeps this tab's totals equal to GrubCenter's report and to the "orders
-  // in scope" count shown in the filter bar. Cancellation-specific breakdowns
-  // (reasons, lost revenue, trend) live on the dedicated Cancellations tab.
+export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<TabPayload> {
+  // Every GrubCenter headline view checked against this tab — the Home page's
+  // Sales Summary widget (Yesterday and Today) and Real-Time Reports >
+  // Dashboard (Yesterday) — excludes cancelled orders from Number of Orders/
+  // Net Sales/Gross Sales/AOV. A single cancelled order (AED 58, confirmed
+  // via the Cancellations tab) was otherwise inflating our totals by exactly
+  // one order and its net sales. Cancellation-specific breakdowns (reasons,
+  // lost revenue, trend) live on the dedicated Cancellations tab, which still
+  // sees every status via `baseWhere`.
+  const where: Prisma.OrderWhereInput = { ...baseWhere, status: "COMPLETED" };
   const [
     totals,
+    cancelledTotals,
     dims,
     byBrandGroups,
     byChannelGroups,
@@ -29,11 +33,19 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
       _sum: { netSales: true, receiptTotal: true, discountAmount: true },
       _count: { _all: true },
     }),
+    // Surfaced as its own card so cancelled activity stays visible on this
+    // tab without folding back into Gross/Net Sales — same netSales-as-
+    // amount convention as the Cancellations tab (lib/grubtech/kpis/cancellations.ts).
+    prisma.order.aggregate({
+      where: { ...baseWhere, status: "CANCELLED" },
+      _sum: { netSales: true },
+      _count: { _all: true },
+    }),
     loadDimensionMaps(),
     prisma.order.groupBy({
       by: ["brandId"],
       where,
-      _sum: { netSales: true, discountAmount: true },
+      _sum: { netSales: true, discountAmount: true, receiptTotal: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
@@ -45,7 +57,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
     prisma.order.groupBy({
       by: ["receivedDateKey"],
       where,
-      _sum: { netSales: true, discountAmount: true },
+      _sum: { netSales: true, discountAmount: true, receiptTotal: true },
       _count: { _all: true },
     }),
     prisma.order.groupBy({
@@ -77,15 +89,23 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
   const netSales = num(totals._sum.netSales);
   const receiptTotal = num(totals._sum.receiptTotal);
   const totalDiscount = num(totals._sum.discountAmount);
-  // Sales before discounts were applied — GrubCenter doesn't export this
-  // directly, so it's derived from the two figures it does export.
-  const grossSales = netSales + totalDiscount;
+  // Pre-discount, tax-inclusive sales — confirmed against GrubCenter's own
+  // Home "Sales Summary" widget and Real-Time Reports > Dashboard, both of
+  // which show Net + Discount + VAT exactly (e.g. 834.86 + 223.40 + 41.74 =
+  // 1,100.00). receiptTotal (aliased from the live API's tax-inclusive
+  // "totalPrice") already equals Net + VAT to the cent with no backfill
+  // needed, so Gross = receiptTotal + discount reproduces the same figure
+  // without depending on the newly-added (and not yet backfilled) taxAmount.
+  const grossSales = receiptTotal + totalDiscount;
   const totalOrders = totals._count._all;
   // Matches GrubCenter's own "Avg. Order Value" tile, which divides by gross
   // sales (pre-discount), not net sales — confirmed against their dashboard:
   // 19,035.60 gross / 276 orders = 68.97, exactly their displayed AOV, while
   // netSales / orders (12,238.50 / 276 = 44.34) does not match it.
   const aov = safeDiv(grossSales, totalOrders);
+
+  const cancelledAmount = num(cancelledTotals._sum.netSales);
+  const cancelledOrders = cancelledTotals._count._all;
 
   const distinctDays = byDateGroups.length;
   const avgRunRate = netSales / (distinctDays || 1);
@@ -98,6 +118,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
       netSales: num(g._sum.netSales),
       orders: g._count._all,
       discount: num(g._sum.discountAmount),
+      receiptTotal: num(g._sum.receiptTotal),
     })),
     (v) => v.netSales,
   );
@@ -105,12 +126,13 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
 
   // Cuisine only exists on Brand, not as a column on Order — re-roll the
   // already-fetched (small) brand groups instead of a separate DB query.
-  const byCuisine = new Map<string, { netSales: number; orders: number; discount: number }>();
+  const byCuisine = new Map<string, { netSales: number; orders: number; discount: number; receiptTotal: number }>();
   for (const b of brandRows) {
-    const entry = byCuisine.get(b.cuisine) ?? { netSales: 0, orders: 0, discount: 0 };
+    const entry = byCuisine.get(b.cuisine) ?? { netSales: 0, orders: 0, discount: 0, receiptTotal: 0 };
     entry.netSales += b.netSales;
     entry.orders += b.orders;
     entry.discount += b.discount;
+    entry.receiptTotal += b.receiptTotal;
     byCuisine.set(b.cuisine, entry);
   }
   const cuisineRows = sortDesc(
@@ -133,19 +155,21 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
       date: g.receivedDateKey,
       netSales: num(g._sum.netSales),
       discount: num(g._sum.discountAmount),
+      receiptTotal: num(g._sum.receiptTotal),
       orders: g._count._all,
     }))
     .sort((a, b) => (a.date < b.date ? -1 : 1));
 
   // No quarter field on Order — day-level sums are already fetched for the
   // daily chart/report, so roll those up rather than a separate DB query.
-  const byQuarter = new Map<string, { netSales: number; discount: number; orders: number }>();
+  const byQuarter = new Map<string, { netSales: number; discount: number; receiptTotal: number; orders: number }>();
   for (const d of dateRows) {
     const [year, month] = d.date.split("-").map(Number);
     const key = `${year} Q${Math.ceil(month / 3)}`;
-    const entry = byQuarter.get(key) ?? { netSales: 0, discount: 0, orders: 0 };
+    const entry = byQuarter.get(key) ?? { netSales: 0, discount: 0, receiptTotal: 0, orders: 0 };
     entry.netSales += d.netSales;
     entry.discount += d.discount;
+    entry.receiptTotal += d.receiptTotal;
     entry.orders += d.orders;
     byQuarter.set(key, entry);
   }
@@ -183,6 +207,11 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
       { key: "grossSales", label: "Gross Sales", value: fmtCurrencyCompact(grossSales), fullValue: fmtCurrencyExact(grossSales) },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
       { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders), fullValue: fmtNumber(totalOrders) },
+      // Kept separate from Total Orders/Gross Sales above (which are
+      // completed-only, matching GrubCenter) so cancelled activity is still
+      // visible on this tab instead of only on the dedicated Cancellations tab.
+      { key: "cancelledOrders", label: "Cancelled Orders", value: fmtNumberCompact(cancelledOrders), fullValue: fmtNumber(cancelledOrders), accent: true },
+      { key: "cancelledAmount", label: "Cancelled Amount", value: fmtCurrencyCompact(cancelledAmount), fullValue: fmtCurrencyExact(cancelledAmount), accent: true },
       { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
       { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
       { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
@@ -295,7 +324,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
         cuisine: b.cuisine,
         netSales: fmtCurrency(b.netSales),
         orders: fmtNumber(b.orders),
-        aov: fmtCurrency(safeDiv(b.netSales + b.discount, b.orders)),
+        aov: fmtCurrency(safeDiv(b.receiptTotal + b.discount, b.orders)),
         discount: fmtCurrency(b.discount),
         // Discount rate off the original (pre-discount) price — netSales is
         // already post-discount, so the base is netSales + discount, not netSales.
@@ -317,7 +346,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           cuisine: c.cuisine,
           netSales: fmtCurrency(c.netSales),
           orders: fmtNumber(c.orders),
-          aov: fmtCurrency(safeDiv(c.netSales + c.discount, c.orders)),
+          aov: fmtCurrency(safeDiv(c.receiptTotal + c.discount, c.orders)),
           discount: fmtCurrency(c.discount),
           share: fmtPercent(safeDiv(c.netSales, netSales) * 100),
         })),
@@ -334,7 +363,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           date: d.date,
           netSales: fmtCurrency(d.netSales),
           orders: fmtNumber(d.orders),
-          aov: fmtCurrency(safeDiv(d.netSales + d.discount, d.orders)),
+          aov: fmtCurrency(safeDiv(d.receiptTotal + d.discount, d.orders)),
         })),
       },
       {
@@ -349,7 +378,7 @@ export async function buildSalesTab(where: Prisma.OrderWhereInput): Promise<TabP
           quarter: q.quarter,
           netSales: fmtCurrency(q.netSales),
           orders: fmtNumber(q.orders),
-          aov: fmtCurrency(safeDiv(q.netSales + q.discount, q.orders)),
+          aov: fmtCurrency(safeDiv(q.receiptTotal + q.discount, q.orders)),
         })),
       },
     ],

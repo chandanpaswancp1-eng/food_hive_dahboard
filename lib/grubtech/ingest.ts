@@ -165,6 +165,7 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     receiptTotal,
     discountAmount,
     discountPercent,
+    taxAmount: order.taxAmount ?? 0,
     paymentMethod: order.paymentMethod,
     deliveryPartner: order.deliveryPartner,
     dayName: order.calendar.dayName,

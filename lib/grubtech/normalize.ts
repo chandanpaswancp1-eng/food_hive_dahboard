@@ -54,6 +54,7 @@ const ALIASES = {
     "totalPrice",
   ],
   discountAmount: ["Discount (AED)", "Discount", "discount_amount", "discountAmount", "discountedAmount"],
+  taxAmount: ["VAT (AED)", "Tax (AED)", "vat_amount", "taxAmount", "calculatedTaxAmount", "vatAmount"],
   status: ["Order Status", "order_status", "orderStatus", "status"],
   cancellationReason: [
     "Cancellation Reason",
@@ -132,6 +133,7 @@ const NormalizedOrderInput = z.object({
   netSales: z.coerce.number(),
   receiptTotal: z.coerce.number().optional(),
   discountAmount: z.coerce.number().optional(),
+  taxAmount: z.coerce.number().optional(),
   status: z.string().optional(),
   cancellationReason: z.string().optional(),
   isPostCancelled: YesNoBoolean,
