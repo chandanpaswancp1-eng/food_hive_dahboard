@@ -13,6 +13,11 @@ declare global {
 // never starts a fetch with a token that expires mid-request.
 const REFRESH_MARGIN_MS = 5 * 60_000;
 
+// amazon-cognito-identity-js uses its own internal HTTP client with no
+// timeout/AbortSignal option — a stalled connection here would hang forever
+// with no error, same risk as the unbounded fetch() calls in fetchOrders.ts.
+const AUTH_TIMEOUT_MS = 30_000;
+
 function decodeJwtExpiry(token: string): number {
   const payload = JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString("utf8"));
   return payload.exp * 1000;
@@ -63,7 +68,12 @@ export async function getGrubCenterToken(): Promise<string> {
     return cached.token;
   }
 
-  const token = await authenticate();
+  const token = await Promise.race([
+    authenticate(),
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`GrubCenter Cognito auth timed out after ${AUTH_TIMEOUT_MS}ms`)), AUTH_TIMEOUT_MS),
+    ),
+  ]);
   globalThis.__grubcenterTokenCache = { token, expiresAt: decodeJwtExpiry(token) };
   return token;
 }

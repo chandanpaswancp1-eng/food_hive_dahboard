@@ -3,6 +3,13 @@ import { getGrubCenterToken } from "./cognitoAuth";
 const API_BASE = "https://internal-api.grubtech.io/data-visualization/api/v1";
 const PAGE_SIZE = 200;
 
+// No timeout was previously set on these calls at all — a single stalled
+// TCP connection to GrubCenter (confirmed to happen for real: a live-sync
+// tick sat hung for 25+ minutes with no error, no retry, silently blocking
+// the whole scheduler) could hang indefinitely instead of failing fast and
+// letting the existing retry/scheduler-level recovery kick in.
+const REQUEST_TIMEOUT_MS = 30_000;
+
 async function fetchPaginated(path: string, from: Date, to: Date, token: string): Promise<unknown[]> {
   const partnerId = process.env.GRUBCENTER_PARTNER_ID;
   if (!partnerId) throw new Error("Missing GRUBCENTER_PARTNER_ID");
@@ -26,6 +33,7 @@ async function fetchPaginated(path: string, from: Date, to: Date, token: string)
         Accept: "application/json",
       },
       body: "{}",
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
 
     if (!res.ok) {
