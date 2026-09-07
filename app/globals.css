@@ -533,6 +533,15 @@ table.data-table {
   color: var(--color-primary);
 }
 
+.btn-icon-only {
+  padding: var(--space-2);
+  gap: 0;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
 .btn-ghost {
   background: transparent;
   color: var(--color-primary);

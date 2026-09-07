@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Circle, AlertCircle, Loader2, Download } from "lucide-react";
+import { CheckCircle2, Circle, AlertCircle, Loader2, Download, RefreshCw } from "lucide-react";
 import type { SyncStatusPayload, TabId } from "@/lib/types";
 import { TAB_LABELS } from "@/lib/types";
 import { fmtTimeGst } from "@/lib/format";
@@ -8,11 +8,13 @@ import { fmtTimeGst } from "@/lib/format";
 interface Props {
   sync: SyncStatusPayload | null;
   onExport: () => void;
+  onManualSync: () => void;
+  manualSyncing: boolean;
   importMessage?: string | null;
   activeTab: TabId;
 }
 
-export function Header({ sync, onExport, importMessage, activeTab }: Props) {
+export function Header({ sync, onExport, onManualSync, manualSyncing, importMessage, activeTab }: Props) {
   const mode = sync?.mode ?? "none";
   const source = sync?.source ?? null;
   const healthy = sync?.healthy ?? null;
@@ -57,6 +59,15 @@ export function Header({ sync, onExport, importMessage, activeTab }: Props) {
           <span>{label}</span>
           {sync?.lastSyncedAt && <span>· {fmtTimeGst(sync.lastSyncedAt)}</span>}
         </div>
+        <button
+          className="btn btn-secondary btn-icon-only"
+          onClick={onManualSync}
+          disabled={manualSyncing}
+          title="Sync now"
+          aria-label="Sync now"
+        >
+          <RefreshCw size={14} className={manualSyncing ? "spin" : undefined} />
+        </button>
         {importMessage && <span className="panel-caption">{importMessage}</span>}
         <button className="btn btn-secondary" onClick={onExport}>
           <Download size={14} />

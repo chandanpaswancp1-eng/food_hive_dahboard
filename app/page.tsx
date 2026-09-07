@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
+  const [manualSyncing, setManualSyncing] = useState(false);
   // Drives the auto-refresh effects below (filter options, sync status, tab
   // data) so the dashboard picks up new data from the 10-minute GrubCenter
   // sync without a manual reload — and, as a side benefit, self-heals from
@@ -195,6 +196,24 @@ export default function DashboardPage() {
     }
   };
 
+  const handleManualSync = async () => {
+    setManualSyncing(true);
+    try {
+      await fetch("/api/sync/manual", { method: "POST" });
+    } catch {
+      // Surfaced via the sync pill on the next status fetch below, not a
+      // separate error state here — a failed manual sync looks the same
+      // as any other failed tick.
+    } finally {
+      setManualSyncing(false);
+      // Bumping retryTick re-runs every poll-driven fetch (sync status,
+      // filter options, "today", and the active tab's KPI payload) so the
+      // dashboard reflects whatever the sync just landed immediately,
+      // instead of waiting for the next 5s poll.
+      setRetryTick((t) => t + 1);
+    }
+  };
+
   const handleExport = () => {
     // Intentional: triggers a file download from an API route, not a page navigation.
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
@@ -205,7 +224,14 @@ export default function DashboardPage() {
     <div className="app-shell">
       <Sidebar active={activeTab} onChange={updateTab} />
       <div className="app-content">
-        <Header sync={sync} onExport={handleExport} importMessage={importMessage} activeTab={activeTab} />
+        <Header
+          sync={sync}
+          onExport={handleExport}
+          onManualSync={handleManualSync}
+          manualSyncing={manualSyncing}
+          importMessage={importMessage}
+          activeTab={activeTab}
+        />
         <FilterBar
           filters={filters}
           options={options}
