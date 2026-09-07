@@ -81,6 +81,13 @@ export async function runLiveSync(): Promise<{ recordsIngested: number; issues: 
     const recordsIngested = result.ingested + stockoutResult.ingested;
     const issues = [...result.issues, ...stockoutResult.issues];
 
+    // Distinguishes "GrubCenter had nothing new this tick" from "GrubCenter
+    // had rows but none changed anything" — both show as "0 orders imported"
+    // without this, which cost real debugging time tracing a report-lag
+    // issue that needed several one-off probe scripts to diagnose.
+    const fetchSummary = `${rawOrders.length} orders / ${rawStockoutEvents.length} stockout events fetched from GrubCenter`;
+    const errorMessage = [fetchSummary, ...issues.slice(0, 20)].join(" | ");
+
     await prisma.syncLog.update({
       where: { id: job.id },
       data: {
@@ -88,7 +95,7 @@ export async function runLiveSync(): Promise<{ recordsIngested: number; issues: 
         finishedAt: new Date(),
         recordsIngested,
         windowTo: to,
-        errorMessage: issues.length ? issues.slice(0, 20).join(" | ") : null,
+        errorMessage,
       },
     });
 

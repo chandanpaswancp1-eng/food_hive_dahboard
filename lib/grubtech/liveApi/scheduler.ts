@@ -9,9 +9,22 @@ const TICK_INTERVAL_MINUTES = 10;
 // only exists to catch rare drift rather than pick up fresh orders quickly.
 const RECONCILE_INTERVAL_MINUTES = 60;
 
+// A cheap, narrow (2-day) reconciliation pass, on its own faster cadence.
+// Neither the live sync's narrow rolling window nor the hourly full
+// reconciliation can retroactively catch an order GrubCenter's own report
+// API simply hadn't produced yet when they last ran — confirmed for real
+// once (an order sat missing from every report endpoint for 90+ minutes
+// while GrubCenter's own UI already showed it). This exists purely to
+// shrink that detection window from up to an hour down to ~15 minutes,
+// without paying the full 30-day sweep's cost every time.
+const QUICK_RECONCILE_INTERVAL_MINUTES = 15;
+const QUICK_RECONCILE_WINDOW_DAYS = 2;
+const QUICK_RECONCILE_SOURCE = "grubcenter-quick-reconcile";
+
 declare global {
   var __grubcenterSyncTimer: NodeJS.Timeout | undefined;
   var __grubcenterReconcileTimer: NodeJS.Timeout | undefined;
+  var __grubcenterQuickReconcileTimer: NodeJS.Timeout | undefined;
 }
 
 /**
@@ -73,4 +86,34 @@ export function startReconciliationScheduler() {
   console.log(`[grubcenter-reconcile] starting scheduler — checking every ${RECONCILE_INTERVAL_MINUTES} minutes`);
   tick();
   globalThis.__grubcenterReconcileTimer = setInterval(tick, RECONCILE_INTERVAL_MINUTES * 60_000);
+}
+
+/**
+ * Independent of the other two timers — same in-process, single-replica
+ * model, narrow window + fast cadence, purely to shrink the detection
+ * window for a GrubCenter-side reporting lag (see the constant comment above).
+ */
+export function startQuickReconcileScheduler() {
+  if (globalThis.__grubcenterQuickReconcileTimer) return; // survives Next dev hot-reload
+
+  if (!process.env.GRUBCENTER_EMAIL || !process.env.GRUBCENTER_PASSWORD) {
+    console.log("[grubcenter-quick-reconcile] GRUBCENTER_EMAIL/PASSWORD not set — quick-reconcile scheduler not started.");
+    return;
+  }
+
+  const tick = () => {
+    runReconciliation({ windowDays: QUICK_RECONCILE_WINDOW_DAYS, source: QUICK_RECONCILE_SOURCE })
+      .then((result) => {
+        console.log(
+          `[grubcenter-quick-reconcile] ${result.drifted ? `drift fixed (${result.ingested} re-ingested)` : "in sync"} — DB ${result.dbCount} vs GrubCenter ${result.grubCenterCount} (last ${QUICK_RECONCILE_WINDOW_DAYS}d)`,
+        );
+      })
+      .catch((err) => {
+        console.error("[grubcenter-quick-reconcile] check failed:", err instanceof Error ? err.message : err);
+      });
+  };
+
+  console.log(`[grubcenter-quick-reconcile] starting scheduler — checking every ${QUICK_RECONCILE_INTERVAL_MINUTES} minutes`);
+  tick();
+  globalThis.__grubcenterQuickReconcileTimer = setInterval(tick, QUICK_RECONCILE_INTERVAL_MINUTES * 60_000);
 }

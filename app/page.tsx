@@ -12,7 +12,7 @@ import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload
 // — the cache, not this interval, is what bounds actual DB load, so keeping
 // this fast preserves both a responsive live-data feel and the DB-error
 // self-heal behavior below.
-const DASHBOARD_POLL_INTERVAL_MS = 15_000;
+const DASHBOARD_POLL_INTERVAL_MS = 5_000;
 
 function filtersToParams(filters: DashboardFilters): string {
   const params = new URLSearchParams();

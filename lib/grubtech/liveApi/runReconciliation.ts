@@ -10,11 +10,16 @@ import { invalidateTabCache } from "@/lib/grubtech/kpis";
 // health indicator (app/api/sync/status/route.ts) queries "grubcenter-live"
 // specifically for staleness, and must never see reconciliation runs, which
 // are much slower and would make an otherwise-healthy live agent look stale.
-const SOURCE = "grubcenter-reconcile";
+// The quick-reconcile scheduler passes its own distinct source for the same
+// reason — it must stay just as invisible to that check.
+const DEFAULT_SOURCE = "grubcenter-reconcile";
 
 // Wide enough to catch drift from a rare missed/incomplete sync window
-// without re-fetching this app's entire history every run.
-const RECONCILE_WINDOW_DAYS = 30;
+// without re-fetching this app's entire history every run. The faster
+// "quick reconcile" scheduler (scheduler.ts) overrides this to a much
+// narrower window so it can run every 15 minutes instead of every hour —
+// see runReconciliation's `windowDays` option.
+const DEFAULT_RECONCILE_WINDOW_DAYS = 30;
 
 // Counts within a cent of each other are treated as matching — Decimal/
 // float rounding, not real drift.
@@ -34,20 +39,30 @@ export interface ReconciliationResult {
   stockoutEventsProcessed: number;
 }
 
-export async function runReconciliation(): Promise<ReconciliationResult> {
+export interface ReconciliationOptions {
+  /** Overrides DEFAULT_RECONCILE_WINDOW_DAYS — the quick-reconcile scheduler passes 2. */
+  windowDays?: number;
+  /** Overrides DEFAULT_SOURCE — the quick-reconcile scheduler passes its own distinct source. */
+  source?: string;
+}
+
+export async function runReconciliation(options: ReconciliationOptions = {}): Promise<ReconciliationResult> {
+  const source = options.source ?? DEFAULT_SOURCE;
+  const windowDays = options.windowDays ?? DEFAULT_RECONCILE_WINDOW_DAYS;
+
   const staleThreshold = new Date(Date.now() - STALE_RUNNING_MINUTES * 60_000);
   const runningLock = await prisma.syncLog.findFirst({
-    where: { source: SOURCE, status: "RUNNING", startedAt: { gt: staleThreshold } },
+    where: { source, status: "RUNNING", startedAt: { gt: staleThreshold } },
   });
   if (runningLock) {
     return { drifted: false, ingested: 0, grubCenterCount: 0, dbCount: 0, stockoutEventsProcessed: 0 };
   }
 
-  const job = await prisma.syncLog.create({ data: { source: SOURCE, status: "RUNNING" } });
+  const job = await prisma.syncLog.create({ data: { source, status: "RUNNING" } });
 
   try {
     const to = new Date();
-    const from = new Date(to.getTime() - RECONCILE_WINDOW_DAYS * 24 * 60 * 60_000);
+    const from = new Date(to.getTime() - windowDays * 24 * 60 * 60_000);
 
     const [rawOrders, rawStockoutEvents] = await Promise.all([
       fetchLiveOrdersChunked(from, to),
@@ -101,8 +116,8 @@ export async function runReconciliation(): Promise<ReconciliationResult> {
     invalidateTabCache();
 
     const orderSummary = drifted
-      ? `drift detected over last ${RECONCILE_WINDOW_DAYS}d — DB had ${dbCount} orders/AED ${dbNetSales.toFixed(2)}, GrubCenter had ${grubCenterCount}/AED ${grubCenterNetSales.toFixed(2)} — re-ingested ${ingested}`
-      : `in sync — ${dbCount} orders, AED ${dbNetSales.toFixed(2)}, no drift over last ${RECONCILE_WINDOW_DAYS}d`;
+      ? `drift detected over last ${windowDays}d — DB had ${dbCount} orders/AED ${dbNetSales.toFixed(2)}, GrubCenter had ${grubCenterCount}/AED ${grubCenterNetSales.toFixed(2)} (${rawOrders.length} raw rows fetched) — re-ingested ${ingested}`
+      : `in sync — ${dbCount} orders, AED ${dbNetSales.toFixed(2)}, no drift over last ${windowDays}d (${rawOrders.length} raw rows fetched)`;
     const message = `${orderSummary} | stockout events processed: ${stockoutResult.ingested}${stockoutResult.issues.length ? ` (${stockoutResult.issues.length} issues)` : ""}`;
 
     await prisma.syncLog.update({
