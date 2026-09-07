@@ -12,7 +12,8 @@
     "prisma:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "playwright:install": "playwright install chromium",
     "discover:grubcenter": "dotenv -e .env.local -- tsx scraper/discover.ts",
-    "backfill:dubai-calendar": "dotenv -e .env.local -- tsx scripts/backfillDubaiCalendarFields.ts"
+    "backfill:dubai-calendar": "dotenv -e .env.local -- tsx scripts/backfillDubaiCalendarFields.ts",
+    "resync:full": "dotenv -e .env.local -- tsx scripts/fullResync.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",
