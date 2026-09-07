@@ -21,9 +21,14 @@ const DEFAULT_SOURCE = "grubcenter-reconcile";
 // see runReconciliation's `windowDays` option.
 const DEFAULT_RECONCILE_WINDOW_DAYS = 30;
 
-// Counts within a cent of each other are treated as matching — Decimal/
-// float rounding, not real drift.
-const NET_SALES_EPSILON = 0.01;
+// Sums within this many AED are treated as matching — Decimal/float rounding
+// accumulated across a whole window's worth of orders, not real drift.
+// A single cent (the old threshold) was tight enough to false-positive on
+// perfectly-in-sync data (confirmed live: 38 orders both sides, sums 2
+// cents apart), which forced a full re-ingest every 15-minute tick for no
+// real reason. A genuinely missing/extra order moves this by dollars, not
+// cents, so this stays plenty sensitive to real drift.
+const NET_SALES_EPSILON = 0.1;
 
 // A RUNNING row older than this is assumed to be from a crashed process,
 // not a genuinely in-flight check — proceed rather than deadlock forever.
@@ -84,14 +89,28 @@ export async function runReconciliation(options: ReconciliationOptions = {}): Pr
       stockoutResult = { ingested: 0, issues: [error instanceof Error ? error.message : String(error)] };
     }
 
+    // GrubCenter's own report endpoints don't strictly honor the requested
+    // `from` boundary — a handful of rows just before it come back on every
+    // call, chunked or not (confirmed directly: a 2-day fetch returned 7
+    // rows with receivedAt 30min-3h before `from`, all ordinary completed
+    // orders, no chunking-loop math involved). Counting every normalized row
+    // here while dbCount below stays correctly window-filtered created
+    // phantom drift on *every* run — GrubCenter always looked ahead by
+    // however many stray rows leaked in, forcing a full re-ingest every tick
+    // even with zero real drift. Filtering to the same [from, to] window
+    // here makes this an apples-to-apples comparison; ingestRawOrders below
+    // still processes the full rawOrders list when real drift is found, so
+    // those stray-but-real orders still land correctly at their own true
+    // receivedAt — only the drift *count* was wrong, not the ingestion.
     let grubCenterCount = 0;
     let grubCenterNetSales = 0;
     for (const raw of rawOrders) {
       const result = normalizeRawOrder(raw);
-      if (result.ok) {
-        grubCenterCount += 1;
-        grubCenterNetSales += result.order.netSales;
-      }
+      if (!result.ok) continue;
+      const receivedAt = new Date(result.order.receivedAt);
+      if (receivedAt < from || receivedAt > to) continue;
+      grubCenterCount += 1;
+      grubCenterNetSales += result.order.netSales;
     }
 
     const dbAgg = await prisma.order.aggregate({
