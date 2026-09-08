@@ -21,7 +21,7 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
     prisma.order.aggregate({ where: cancelledWhere, _sum: { netSales: true }, _count: { _all: true } }),
     prisma.order.count({ where }),
     loadDimensionMaps(),
-    prisma.order.groupBy({ by: ["channelId"], where: cancelledWhere, _count: { _all: true } }),
+    prisma.order.groupBy({ by: ["channelId"], where: cancelledWhere, _sum: { netSales: true }, _count: { _all: true } }),
     prisma.order.groupBy({ by: ["brandId"], where: cancelledWhere, _sum: { netSales: true } }),
     prisma.order.groupBy({ by: ["locationId"], where: cancelledWhere, _count: { _all: true } }),
     prisma.order.groupBy({
@@ -44,6 +44,7 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
     byChannelGroups.map((g) => ({
       channel: dims.channels.get(g.channelId)?.name ?? "Unknown",
       count: g._count._all,
+      amount: num(g._sum.netSales),
     })),
     (v) => v.count,
   );
@@ -109,6 +110,17 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         subtitle: `${fmtPercent(postCancelledPct)} of cancellations`,
       },
       { key: "worstChannel", label: "Worst Channel", value: worstChannel },
+      // One card per aggregator/channel — the aggregate Cancelled Orders/
+      // Amount cards above blend every channel together, which hides which
+      // specific aggregator (Careem, Deliveroo, Noon, ...) is actually
+      // driving cancellations. Dynamic since the channel set varies.
+      ...channelRows.map((c) => ({
+        key: `cancelledChannel_${c.channel}`,
+        label: `${c.channel} Cancelled`,
+        value: fmtNumberCompact(c.count),
+        fullValue: fmtNumber(c.count),
+        subtitle: fmtCurrencyExact(c.amount),
+      })),
     ],
     charts: [
       {
