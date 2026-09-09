@@ -151,6 +151,17 @@ export default function DashboardPage() {
     updateFilters({ ...filters, dateFrom: todayGst, dateTo: todayGst });
   };
 
+  const applyYesterday = () => {
+    if (!todayGst) return;
+    // todayGst is a date-only "YYYY-MM-DD" GST string — parsed as UTC
+    // midnight here purely to do calendar-day arithmetic on it (no real
+    // timezone conversion involved, so this doesn't need dubaiTime.ts).
+    const d = new Date(`${todayGst}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() - 1);
+    const yesterdayGst = d.toISOString().slice(0, 10);
+    updateFilters({ ...filters, dateFrom: yesterdayGst, dateTo: yesterdayGst });
+  };
+
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
     setImporting(true);
     setImportMessage(null);
@@ -239,6 +250,7 @@ export default function DashboardPage() {
           onReset={() => updateFilters({})}
           todayGst={todayGst}
           onToday={applyToday}
+          onYesterday={applyYesterday}
           scopeLabel={payload ? `${payload.scope.orderCount} orders in scope` : "Loading feed…"}
         />
         <main className="dashboard-main">
