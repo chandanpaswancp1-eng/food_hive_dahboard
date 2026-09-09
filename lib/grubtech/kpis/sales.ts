@@ -409,7 +409,10 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
           { key: "orders", label: "Orders", align: "right" },
           { key: "aov", label: "AOV", align: "right" },
         ],
-        rows: [...dateRows].reverse().map((d) => ({
+        // dateRows is already chronological (oldest -> newest, see its own
+        // sort above) — shown as-is here, unlike Quarterly Report below,
+        // since a daily report reads naturally in date order.
+        rows: dateRows.map((d) => ({
           date: d.date,
           netSales: fmtCurrency(d.netSales),
           orders: fmtNumber(d.orders),
