@@ -3,7 +3,6 @@ import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
 import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
-import { dubaiDateKey, dubaiDateBoundaryToUtc } from "@/lib/grubtech/dubaiTime";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -17,22 +16,9 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
   // lost revenue, trend) live on the dedicated Cancellations tab, which still
   // sees every status via `baseWhere`.
   const where: Prisma.OrderWhereInput = { ...baseWhere, status: "COMPLETED" };
-
-  // Always the current Dubai-local "yesterday", independent of whatever
-  // dateFrom/dateTo is applied — a fixed at-a-glance reference point, not
-  // another filtered view. Non-date filters (brand/location/channel) still
-  // apply, so it stays coherent with whatever else is on screen.
-  const yesterdayKey = dubaiDateKey(new Date(Date.now() - 24 * 60 * 60_000));
-  const yesterdayWhere: Prisma.OrderWhereInput = {
-    ...baseWhere,
-    status: "COMPLETED",
-    receivedAt: { gte: dubaiDateBoundaryToUtc(yesterdayKey, false), lte: dubaiDateBoundaryToUtc(yesterdayKey, true) },
-  };
-
   const [
     totals,
     cancelledTotals,
-    yesterdayTotals,
     dims,
     byBrandGroups,
     byChannelGroups,
@@ -53,11 +39,6 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
     prisma.order.aggregate({
       where: { ...baseWhere, status: "CANCELLED" },
       _sum: { netSales: true },
-      _count: { _all: true },
-    }),
-    prisma.order.aggregate({
-      where: yesterdayWhere,
-      _sum: { netSales: true, receiptTotal: true, discountAmount: true },
       _count: { _all: true },
     }),
     loadDimensionMaps(),
@@ -117,12 +98,6 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
   // without depending on the newly-added (and not yet backfilled) taxAmount.
   const grossSales = receiptTotal + totalDiscount;
   const totalOrders = totals._count._all;
-
-  const yesterdayNetSales = num(yesterdayTotals._sum.netSales);
-  const yesterdayReceiptTotal = num(yesterdayTotals._sum.receiptTotal);
-  const yesterdayDiscount = num(yesterdayTotals._sum.discountAmount);
-  const yesterdayGrossSales = yesterdayReceiptTotal + yesterdayDiscount;
-  const yesterdayOrders = yesterdayTotals._count._all;
   // Matches GrubCenter's own "Avg. Order Value" tile, which divides by gross
   // sales (pre-discount), not net sales — confirmed against their dashboard:
   // 19,035.60 gross / 276 orders = 68.97, exactly their displayed AOV, while
@@ -261,15 +236,6 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
           ]
         : []),
       { key: "topBrand", label: "Top Brand", value: topBrand },
-      // Fixed reference point (always Dubai-local "yesterday"), independent
-      // of whatever dateFrom/dateTo is currently applied — see yesterdayWhere.
-      {
-        key: "yesterdaySales",
-        label: "Yesterday's Sales",
-        value: fmtCurrencyCompact(yesterdayGrossSales),
-        fullValue: fmtCurrencyExact(yesterdayGrossSales),
-        subtitle: `${fmtNumber(yesterdayOrders)} orders · ${fmtCurrency(yesterdayNetSales)} net`,
-      },
     ],
     charts: [
       {
