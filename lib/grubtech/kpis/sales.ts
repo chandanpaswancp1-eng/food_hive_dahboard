@@ -216,18 +216,20 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
       { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
       { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
       { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
-      // A single-day range (e.g. the "Today" filter) makes these redundant/
-      // misleading: avgRunRate collapses to exactly netSales, and
-      // projectedRR becomes a naive x365 extrapolation of one day's sales.
-      // Only meaningful once the range actually spans more than one day.
+      // Always shown, unlike the month/year projections below — on a
+      // single-day range (e.g. "Today") this trivially equals Net Sales,
+      // which is correct, not misleading, so there's no reason to hide it.
+      {
+        key: "runRate",
+        label: "Avg Run Rate",
+        value: `${fmtCurrencyCompact(avgRunRate)}/day`,
+        fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
+      },
+      // A single-day range (e.g. the "Today" filter) makes a month/year
+      // projection genuinely misleading — a naive x30/x365 extrapolation of
+      // one day's sales. Only meaningful once the range spans more than one day.
       ...(distinctDays > 1
         ? [
-            {
-              key: "runRate",
-              label: "Avg Run Rate",
-              value: `${fmtCurrencyCompact(avgRunRate)}/day`,
-              fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
-            },
             {
               key: "projectedMonth",
               label: "Projected Month",
