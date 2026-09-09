@@ -134,7 +134,6 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
   const calendarDays = explicitRangeDays ?? actualSpanDays;
   const avgRunRate = netSales / (calendarDays || 1);
   const projectedMonth = avgRunRate * 30;
-  const projectedRR = avgRunRate * 365;
 
   const brandRows = sortDesc(
     byBrandGroups.map((g) => ({
@@ -229,19 +228,23 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
 
   return {
     kpis: [
+      // Group 1 — core sales figures.
       { key: "grossSales", label: "Gross Sales", value: fmtCurrencyCompact(grossSales), fullValue: fmtCurrencyExact(grossSales) },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
+      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
+      { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
+      { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
+
+      // Group 2 — order counts, completed vs. cancelled.
       { key: "totalOrders", label: "Total Orders", value: fmtNumberCompact(totalOrders), fullValue: fmtNumber(totalOrders) },
       // Kept separate from Total Orders/Gross Sales above (which are
       // completed-only, matching GrubCenter) so cancelled activity is still
       // visible on this tab instead of only on the dedicated Cancellations tab.
       { key: "cancelledOrders", label: "Cancelled Orders", value: fmtNumberCompact(cancelledOrders), fullValue: fmtNumber(cancelledOrders), accent: true },
       { key: "cancelledAmount", label: "Cancelled Amount", value: fmtCurrencyCompact(cancelledAmount), fullValue: fmtCurrencyExact(cancelledAmount), accent: true },
-      { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
-      { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },
-      { key: "aov", label: "Avg Order Value", value: fmtCurrencyCompact(aov), fullValue: fmtCurrencyExact(aov) },
-      // Always shown, unlike the month/year projections below — on a
-      // single-day range (e.g. "Today") this trivially equals Net Sales,
+
+      // Group 3 — run rate. Always shown (unlike Projected Month below) — on
+      // a single-day range (e.g. "Today") this trivially equals Net Sales,
       // which is correct, not misleading, so there's no reason to hide it.
       {
         key: "runRate",
@@ -249,9 +252,9 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
         value: `${fmtCurrencyCompact(avgRunRate)}/day`,
         fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
       },
-      // A single-day range (e.g. the "Today" filter) makes a month/year
-      // projection genuinely misleading — a naive x30/x365 extrapolation of
-      // one day's sales. Only meaningful once the range spans more than one day.
+      // A single-day range (e.g. the "Today" filter) makes a month
+      // projection genuinely misleading — a naive x30 extrapolation of one
+      // day's sales. Only meaningful once the range spans more than one day.
       ...(calendarDays > 1
         ? [
             {
@@ -260,17 +263,14 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
               value: `${fmtCurrencyCompact(projectedMonth)}/mo`,
               fullValue: `${fmtCurrencyExact(projectedMonth)}/mo`,
             },
-            {
-              key: "projectedRR",
-              label: "Projected RR",
-              value: `${fmtCurrencyCompact(projectedRR)}/yr`,
-              fullValue: `${fmtCurrencyExact(projectedRR)}/yr`,
-            },
           ]
         : []),
+
+      // Group 4 — top brand.
       { key: "topBrand", label: "Top Brand", value: topBrand },
-      // One card per portal/channel — average order volume per calendar
-      // day for that channel specifically, same true calendar-day
+
+      // Group 5 — one card per portal/channel: average order volume per
+      // calendar day for that channel specifically, same true calendar-day
       // denominator as Avg Run Rate above (not days-with-orders, which
       // would inflate this the same way it inflated run rate).
       ...channelRows.map((c) => {
