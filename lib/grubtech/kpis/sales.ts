@@ -1,12 +1,20 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import type { TabPayload } from "@/lib/types";
+import type { TabPayload, DashboardFilters } from "@/lib/types";
 import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
+import { dubaiDateKey } from "@/lib/grubtech/dubaiTime";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<TabPayload> {
+/** Inclusive day count between two "YYYY-MM-DD" calendar-date strings. */
+function daysBetweenInclusive(fromKey: string, toKey: string): number {
+  const fromMs = Date.parse(`${fromKey}T00:00:00Z`);
+  const toMs = Date.parse(`${toKey}T00:00:00Z`);
+  return Math.round((toMs - fromMs) / 86_400_000) + 1;
+}
+
+export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: DashboardFilters): Promise<TabPayload> {
   // Every GrubCenter headline view checked against this tab — the Home page's
   // Sales Summary widget (Yesterday and Today) and Real-Time Reports >
   // Dashboard (Yesterday) — excludes cancelled orders from Number of Orders/
@@ -32,6 +40,8 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
       where,
       _sum: { netSales: true, receiptTotal: true, discountAmount: true },
       _count: { _all: true },
+      _min: { receivedAt: true },
+      _max: { receivedAt: true },
     }),
     // Surfaced as its own card so cancelled activity stays visible on this
     // tab without folding back into Gross/Net Sales — same netSales-as-
@@ -107,8 +117,22 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
   const cancelledAmount = num(cancelledTotals._sum.netSales);
   const cancelledOrders = cancelledTotals._count._all;
 
-  const distinctDays = byDateGroups.length;
-  const avgRunRate = netSales / (distinctDays || 1);
+  // The TRUE calendar span, not byDateGroups.length (which only counts days
+  // that had at least one order) — dividing by days-with-orders silently
+  // skips zero-order gap days and inflates the average. Confirmed on real
+  // data: 16 of the last 42 days had zero orders, so the old denominator
+  // (26) overstated the daily average by 61% versus the correct one (42).
+  // Prefer the explicitly selected date range when both ends are set (the
+  // user's chosen period, zero-order days and all); otherwise fall back to
+  // the actual first-to-last order span for whatever's currently in scope.
+  const explicitRangeDays =
+    filters.dateFrom && filters.dateTo ? daysBetweenInclusive(filters.dateFrom, filters.dateTo) : null;
+  const minReceivedAt = totals._min.receivedAt;
+  const maxReceivedAt = totals._max.receivedAt;
+  const actualSpanDays =
+    minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
+  const calendarDays = explicitRangeDays ?? actualSpanDays;
+  const avgRunRate = netSales / (calendarDays || 1);
   const projectedMonth = avgRunRate * 30;
   const projectedRR = avgRunRate * 365;
 
@@ -228,7 +252,7 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
       // A single-day range (e.g. the "Today" filter) makes a month/year
       // projection genuinely misleading — a naive x30/x365 extrapolation of
       // one day's sales. Only meaningful once the range spans more than one day.
-      ...(distinctDays > 1
+      ...(calendarDays > 1
         ? [
             {
               key: "projectedMonth",

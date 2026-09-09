@@ -25,7 +25,7 @@ async function computeTabPayload(tab: TabId, filters: DashboardFilters): Promise
 
   switch (tab) {
     case "order-details":
-      return buildSalesTab(where);
+      return buildSalesTab(where, filters);
     case "cancellations":
       return buildCancellationsTab(where);
     case "prep-time":
