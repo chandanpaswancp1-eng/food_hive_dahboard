@@ -37,6 +37,11 @@ export default function DashboardPage() {
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [drillScope, setDrillScope] = useState<Partial<DashboardFilters> | null>(null);
+  // Overrides which tab's status convention /api/orders applies for this
+  // drill — e.g. clicking a "Cancelled Orders" card shown on Order Details
+  // (otherwise completed-only) still needs to drill through as CANCELLED,
+  // not whatever the currently active dashboard tab happens to be.
+  const [drillTab, setDrillTab] = useState<TabId | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [manualSyncing, setManualSyncing] = useState(false);
   // Drives the auto-refresh effects below (filter options, sync status, tab
@@ -162,6 +167,11 @@ export default function DashboardPage() {
     updateFilters({ ...filters, dateFrom: yesterdayGst, dateTo: yesterdayGst });
   };
 
+  const handleDrill = (filter: Partial<DashboardFilters>, tabOverride?: TabId) => {
+    setDrillScope(filter);
+    setDrillTab(tabOverride ?? activeTab);
+  };
+
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
     setImporting(true);
     setImportMessage(null);
@@ -267,13 +277,21 @@ export default function DashboardPage() {
               activeTab={activeTab}
               importing={importing}
               onImport={handleImport}
-              onDrill={setDrillScope}
+              onDrill={handleDrill}
             />
           )}
         </main>
       </div>
-      {drillScope && (
-        <DrillThroughModal filters={filters} scope={drillScope} tab={activeTab} onClose={() => setDrillScope(null)} />
+      {drillScope && drillTab && (
+        <DrillThroughModal
+          filters={filters}
+          scope={drillScope}
+          tab={drillTab}
+          onClose={() => {
+            setDrillScope(null);
+            setDrillTab(null);
+          }}
+        />
       )}
     </div>
   );

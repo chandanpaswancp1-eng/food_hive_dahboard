@@ -364,6 +364,19 @@ button, input, select {
   transform: translateY(-1px);
 }
 
+.kpi-clickable {
+  cursor: pointer;
+}
+
+.kpi-clickable:hover {
+  border-left-width: 5px;
+}
+
+.kpi-clickable:focus-visible {
+  outline: 2px solid var(--kpi-border, var(--secondary-500));
+  outline-offset: 2px;
+}
+
 .kpi-icon-badge {
   width: 32px;
   height: 32px;

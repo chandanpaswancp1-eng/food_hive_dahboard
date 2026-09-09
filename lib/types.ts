@@ -54,6 +54,16 @@ export interface KpiValue {
   fullValue?: string;
   subtitle?: string;
   accent?: boolean;
+  /**
+   * Makes the card clickable, opening the drill-through modal. `drillTab`
+   * overrides which tab's status convention /api/orders applies (e.g. a
+   * "Cancelled Orders" card shown on Order Details, which is otherwise
+   * completed-only, still needs to drill through as CANCELLED-only) —
+   * defaults to whichever tab is currently active. `drillFilter` narrows
+   * further (e.g. a specific channel for a per-portal card).
+   */
+  drillTab?: TabId;
+  drillFilter?: Partial<DashboardFilters>;
 }
 
 export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo";

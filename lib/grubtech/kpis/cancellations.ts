@@ -88,6 +88,10 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         value: fmtCurrencyCompact(cancelledAmount),
         fullValue: fmtCurrencyExact(cancelledAmount),
         accent: true,
+        // Already on the Cancellations tab so no real override is needed,
+        // but drillTab still has to be set to something to mark the card
+        // clickable at all (see KpiStrip's isDrillable check).
+        drillTab: "cancellations",
       },
       {
         key: "cancelledOrders",
@@ -95,6 +99,7 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         value: fmtNumberCompact(cancelledCount),
         fullValue: fmtNumber(cancelledCount),
         subtitle: fmtPercent(cancelRate),
+        drillTab: "cancellations",
       },
       {
         key: "cancelledAov",
@@ -120,6 +125,8 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         value: fmtNumberCompact(c.count),
         fullValue: fmtNumber(c.count),
         subtitle: fmtCurrencyExact(c.amount),
+        drillTab: "cancellations" as const,
+        drillFilter: { channels: [c.channel] },
       })),
     ],
     charts: [

@@ -240,8 +240,11 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
       // Kept separate from Total Orders/Gross Sales above (which are
       // completed-only, matching GrubCenter) so cancelled activity is still
       // visible on this tab instead of only on the dedicated Cancellations tab.
-      { key: "cancelledOrders", label: "Cancelled Orders", value: fmtNumberCompact(cancelledOrders), fullValue: fmtNumber(cancelledOrders), accent: true },
-      { key: "cancelledAmount", label: "Cancelled Amount", value: fmtCurrencyCompact(cancelledAmount), fullValue: fmtCurrencyExact(cancelledAmount), accent: true },
+      // drillTab override needed here specifically — this tab's own drill-
+      // through convention is completed-only, so without it, clicking these
+      // would show completed orders instead of the cancelled ones they name.
+      { key: "cancelledOrders", label: "Cancelled Orders", value: fmtNumberCompact(cancelledOrders), fullValue: fmtNumber(cancelledOrders), accent: true, drillTab: "cancellations" },
+      { key: "cancelledAmount", label: "Cancelled Amount", value: fmtCurrencyCompact(cancelledAmount), fullValue: fmtCurrencyExact(cancelledAmount), accent: true, drillTab: "cancellations" },
 
       // Group 3 — run rate. Always shown (unlike Projected Month below) — on
       // a single-day range (e.g. "Today") this trivially equals Net Sales,

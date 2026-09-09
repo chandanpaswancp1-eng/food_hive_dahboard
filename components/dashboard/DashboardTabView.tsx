@@ -14,7 +14,7 @@ interface Props {
   activeTab: TabId;
   importing: boolean;
   onImport: (file: File, hint?: ReportTypeHint) => void;
-  onDrill: (filter: Partial<DashboardFilters>) => void;
+  onDrill: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
 }
 
 export function DashboardTabView({ payload, loading, activeTab, importing, onImport, onDrill }: Props) {
@@ -30,7 +30,7 @@ export function DashboardTabView({ payload, loading, activeTab, importing, onImp
         </div>
       ) : (
         <>
-          <KpiStrip kpis={payload.kpis} activeTab={activeTab} />
+          <KpiStrip kpis={payload.kpis} activeTab={activeTab} onDrill={onDrill} />
           <div className="chart-grid">
             {payload.charts.map((chart) => (
               <ChartPanel key={chart.id} spec={chart} onSlice={onDrill} />
