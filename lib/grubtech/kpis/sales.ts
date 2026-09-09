@@ -269,6 +269,20 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
           ]
         : []),
       { key: "topBrand", label: "Top Brand", value: topBrand },
+      // One card per portal/channel — average order volume per calendar
+      // day for that channel specifically, same true calendar-day
+      // denominator as Avg Run Rate above (not days-with-orders, which
+      // would inflate this the same way it inflated run rate).
+      ...channelRows.map((c) => {
+        const ordersPerDay = c.orders / (calendarDays || 1);
+        return {
+          key: `ordersPerDay_${c.channel}`,
+          label: `${c.channel} Orders/Day`,
+          value: ordersPerDay.toFixed(2),
+          fullValue: `${ordersPerDay.toFixed(2)}/day`,
+          subtitle: `${fmtNumber(c.orders)} orders total`,
+        };
+      }),
     ],
     charts: [
       {
