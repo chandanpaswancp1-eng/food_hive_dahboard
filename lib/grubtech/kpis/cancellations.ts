@@ -154,6 +154,13 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         datasets: [{ label: "Orders", data: [postCancelledCount, cancelledCount - postCancelledCount] }],
       },
       {
+        id: "cancelled-by-reason",
+        title: "Cancelled Orders by Reason",
+        type: "hbar",
+        labels: reasonRows.map((r) => r.reason),
+        datasets: [{ label: "Cancelled Orders", data: reasonRows.map((r) => r.orders) }],
+      },
+      {
         id: "cancelled-by-location",
         title: "Cancelled Orders by Location",
         type: "hbar",
