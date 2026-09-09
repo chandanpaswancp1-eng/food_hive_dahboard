@@ -2,6 +2,7 @@ import { prisma } from "@/lib/db";
 import { ItemType, OrderStatus, Prisma } from "@prisma/client";
 import { normalizeRawOrder, type NormalizedOrder } from "./normalize";
 import { dubaiDateKey } from "./dubaiTime";
+import { inferCuisineFromBrandName } from "./cuisine";
 
 /**
  * Resolving Brand/Location/Channel/CancellationReason per row (4 upserts x
@@ -34,10 +35,15 @@ class DimensionCache {
   async resolveBrand(name: string, cuisine?: string): Promise<string> {
     const cached = this.brand.get(name);
     if (cached) return cached;
+    // Prefer a real cuisine when the source actually provides one (CSV
+    // imports carry a real "Cuisine Cluster" column); GrubCenter's live API
+    // never does, so every brand it creates falls back to a name-based
+    // guess rather than sitting null forever (see cuisine.ts).
+    const resolvedCuisine = cuisine ?? inferCuisineFromBrandName(name);
     const row = await prisma.brand.upsert({
       where: { name },
-      update: cuisine ? { cuisine } : {},
-      create: { name, cuisine },
+      update: { cuisine: resolvedCuisine },
+      create: { name, cuisine: resolvedCuisine },
     });
     this.brand.set(name, row.id);
     return row.id;
