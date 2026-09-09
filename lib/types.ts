@@ -180,4 +180,6 @@ export interface OrderInvoice {
   delayMinutes: number | null;
   rating: number | null;
   items: InvoiceLineItem[];
+  /** True when `items` is a synthetic order-total fallback, not a real per-SKU breakdown. */
+  itemsEstimated: boolean;
 }

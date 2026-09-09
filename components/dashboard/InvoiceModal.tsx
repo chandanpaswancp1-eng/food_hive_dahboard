@@ -133,24 +133,21 @@ export function InvoiceModal({ orderId, onClose }: Props) {
                   </tr>
                 </thead>
                 <tbody>
-                  {invoice.items.length === 0 ? (
-                    <tr>
-                      <td colSpan={4} className="empty-state" style={{ padding: "var(--space-4)" }}>
-                        No line items recorded for this order.
-                      </td>
+                  {invoice.items.map((it, i) => (
+                    <tr key={i}>
+                      <td>{it.name}</td>
+                      <td className="num">{it.quantity}</td>
+                      <td className="num">{fmtCurrencyExact(it.unitPrice)}</td>
+                      <td className="num">{fmtCurrencyExact(it.totalPrice)}</td>
                     </tr>
-                  ) : (
-                    invoice.items.map((it, i) => (
-                      <tr key={i}>
-                        <td>{it.name}</td>
-                        <td className="num">{it.quantity}</td>
-                        <td className="num">{fmtCurrencyExact(it.unitPrice)}</td>
-                        <td className="num">{fmtCurrencyExact(it.totalPrice)}</td>
-                      </tr>
-                    ))
-                  )}
+                  ))}
                 </tbody>
               </table>
+              {invoice.itemsEstimated && (
+                <div className="invoice-note">
+                  GrubCenter does not report a per-item breakdown for this order — the line above is the order&apos;s total.
+                </div>
+              )}
 
               <div className="invoice-totals">
                 <div className="invoice-totals-row">

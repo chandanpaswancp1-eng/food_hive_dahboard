@@ -23,6 +23,30 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
       return NextResponse.json({ error: "Order not found" }, { status: 404 });
     }
 
+    // GrubCenter's currently wired live endpoints (order-details, cancelled-orders,
+    // location-performance) carry only order-level totals — no per-SKU name/price
+    // breakdown exists anywhere in their raw fields (confirmed by inspecting every
+    // field returned across a live sample: no item/product/menu keys at all, same
+    // gap as the still-open Ratings source). Rather than show a blank invoice, fall
+    // back to a single line representing the order's own total — clearly flagged
+    // via itemsEstimated so the UI doesn't present it as a real per-item breakdown.
+    const items =
+      order.items.length > 0
+        ? order.items.map((it) => ({
+            name: it.name,
+            quantity: it.quantity,
+            unitPrice: Number(it.unitPrice),
+            totalPrice: Number(it.totalPrice),
+          }))
+        : [
+            {
+              name: order.brand.name,
+              quantity: 1,
+              unitPrice: Number(order.receiptTotal),
+              totalPrice: Number(order.receiptTotal),
+            },
+          ];
+
     const invoice: OrderInvoice = {
       id: order.id,
       orderNumber: order.orderNumber,
@@ -44,12 +68,8 @@ export async function GET(_req: NextRequest, context: { params: Promise<{ id: st
       actualPrepTime: order.actualPrepTime ? Number(order.actualPrepTime) : null,
       delayMinutes: order.delayMinutes ? Number(order.delayMinutes) : null,
       rating: order.ratings[0]?.value ?? null,
-      items: order.items.map((it) => ({
-        name: it.name,
-        quantity: it.quantity,
-        unitPrice: Number(it.unitPrice),
-        totalPrice: Number(it.totalPrice),
-      })),
+      items,
+      itemsEstimated: order.items.length === 0,
     };
 
     return NextResponse.json(invoice);
