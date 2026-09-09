@@ -109,6 +109,7 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
 
   const distinctDays = byDateGroups.length;
   const avgRunRate = netSales / (distinctDays || 1);
+  const projectedMonth = avgRunRate * 30;
   const projectedRR = avgRunRate * 365;
 
   const brandRows = sortDesc(
@@ -226,6 +227,12 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput): Promise<
               label: "Avg Run Rate",
               value: `${fmtCurrencyCompact(avgRunRate)}/day`,
               fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
+            },
+            {
+              key: "projectedMonth",
+              label: "Projected Month",
+              value: `${fmtCurrencyCompact(projectedMonth)}/mo`,
+              fullValue: `${fmtCurrencyExact(projectedMonth)}/mo`,
             },
             {
               key: "projectedRR",
