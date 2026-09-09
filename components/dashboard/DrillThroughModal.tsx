@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DashboardFilters, DrillThroughRow, TabId } from "@/lib/types";
 import { fmtDateTimeGst } from "@/lib/format";
+import { InvoiceModal } from "./InvoiceModal";
 
 interface Props {
   filters: DashboardFilters;
@@ -38,6 +39,7 @@ function describeScope(scope: Partial<DashboardFilters>): string | null {
 export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
   const [rows, setRows] = useState<DrillThroughRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [invoiceOrderId, setInvoiceOrderId] = useState<string | null>(null);
   const effectiveFilters: DashboardFilters = { ...filters, ...scope };
   const scopeLabel = describeScope(scope);
   // effectiveFilters is a fresh object every render — key the effect off its
@@ -66,6 +68,7 @@ export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
   }, [queryKey]);
 
   return (
+    <>
     <div className="modal-backdrop" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
@@ -101,7 +104,7 @@ export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id}>
+                  <tr key={r.id} onClick={() => setInvoiceOrderId(r.id)} title="Click for invoice">
                     <td>{r.orderNumber}</td>
                     <td>{fmtDateTimeGst(r.receivedAt)}</td>
                     <td>{r.brand}</td>
@@ -120,5 +123,7 @@ export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
         </div>
       </div>
     </div>
+    {invoiceOrderId && <InvoiceModal orderId={invoiceOrderId} onClose={() => setInvoiceOrderId(null)} />}
+    </>
   );
 }

@@ -150,3 +150,34 @@ export interface DrillThroughRow {
   actualPrepTime: number | null;
   rating: number | null;
 }
+
+export interface InvoiceLineItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface OrderInvoice {
+  id: string;
+  orderNumber: string;
+  receivedAt: string;
+  brand: string;
+  location: string;
+  channel: string;
+  paymentMethod: string | null;
+  status: string;
+  isPostCancelled: boolean;
+  cancellationReason: string | null;
+  deliveryPartner: string | null;
+  netSales: number;
+  receiptTotal: number;
+  discountAmount: number;
+  discountPercent: number;
+  taxAmount: number;
+  grossSales: number;
+  actualPrepTime: number | null;
+  delayMinutes: number | null;
+  rating: number | null;
+  items: InvoiceLineItem[];
+}

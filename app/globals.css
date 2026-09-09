@@ -762,6 +762,109 @@ select.input {
   font-size: 13px;
 }
 
+/* ---- invoice ---- */
+
+.invoice-modal {
+  max-width: 720px;
+}
+
+.invoice-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.invoice-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.invoice-brand {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--color-primary);
+}
+
+.invoice-top-right {
+  text-align: right;
+}
+
+.invoice-title {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
+}
+
+.invoice-meta {
+  font-size: 13px;
+  color: var(--color-text-muted);
+}
+
+.invoice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3) var(--space-5);
+}
+
+.invoice-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.invoice-totals {
+  align-self: flex-end;
+  width: 100%;
+  max-width: 320px;
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.invoice-totals-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 14px;
+  padding: var(--space-1) 0;
+}
+
+.invoice-totals-total {
+  border-top: 1px solid var(--color-border);
+  margin-top: var(--space-1);
+  padding-top: var(--space-2);
+  font-weight: 800;
+}
+
+/* Only the invoice sheet should print — everything else (backdrop, other
+   modals, the dashboard behind it) is hidden so "Print / Save PDF" produces
+   a clean single-page invoice instead of a screenshot of the whole app. */
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .invoice-modal,
+  .invoice-modal * {
+    visibility: visible;
+  }
+
+  .invoice-modal {
+    position: absolute;
+    inset: 0;
+    max-width: none;
+    max-height: none;
+    box-shadow: none;
+  }
+
+  .invoice-modal .no-print {
+    display: none;
+  }
+}
+
 /* ---- responsive ---- */
 
 @media (max-width: 900px) {
