@@ -232,6 +232,8 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       .map((g) => ({ method: g.paymentMethod, netSales: num(g._sum.netSales), orders: g._count._all })),
     (v) => v.netSales,
   );
+  const cashAmount = paymentRows.find((p) => p.method === "CASH")?.netSales ?? 0;
+  const cardAmount = paymentRows.find((p) => p.method === "CARD")?.netSales ?? 0;
 
   return {
     kpis: [
@@ -296,6 +298,24 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         drillFilter: { channels: [c.channel] },
         editCommission: { channel: c.channel, currentRate: c.rate },
       })),
+
+      // Group 6 — cash vs. card actually handed over at the point of sale,
+      // as distinct from PREPAID (settled on the delivery platform, never
+      // touches this business's till) and FOC (free, nothing collected).
+      {
+        key: "cashAmount",
+        label: "Cash Amount",
+        value: fmtCurrencyCompact(cashAmount),
+        fullValue: fmtCurrencyExact(cashAmount),
+        drillFilter: { paymentMethods: ["CASH"] },
+      },
+      {
+        key: "cardAmount",
+        label: "Card Amount Received",
+        value: fmtCurrencyCompact(cardAmount),
+        fullValue: fmtCurrencyExact(cardAmount),
+        drillFilter: { paymentMethods: ["CARD"] },
+      },
     ],
     charts: [
       {
