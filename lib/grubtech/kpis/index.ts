@@ -8,6 +8,7 @@ import { buildPrepTimeTab } from "./prepTime";
 import { buildRatingsTab } from "./ratings";
 import { buildDelayedTab } from "./delayed";
 import { buildStockoutsTab } from "./stockouts";
+import { buildIncomeTab } from "./income";
 
 const TAB_CACHE_TTL_MS = 20_000;
 const tabCache = new Map<string, { data: TabPayload; expiresAt: number }>();
@@ -24,6 +25,8 @@ async function computeTabPayload(tab: TabId, filters: DashboardFilters): Promise
   const where = buildOrderWhere(filters);
 
   switch (tab) {
+    case "income":
+      return buildIncomeTab(where, filters);
     case "order-details":
       return buildSalesTab(where, filters);
     case "cancellations":

@@ -132,7 +132,7 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
   const actualSpanDays =
     minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
   const calendarDays = explicitRangeDays ?? actualSpanDays;
-  const avgRunRate = netSales / (calendarDays || 1);
+  const avgRunRate = netSales / Math.max(calendarDays, 1);
   const projectedMonth = avgRunRate * 30;
 
   const brandRows = sortDesc(
@@ -277,7 +277,7 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
       // denominator as Avg Run Rate above (not days-with-orders, which
       // would inflate this the same way it inflated run rate).
       ...channelRows.map((c) => {
-        const ordersPerDay = c.orders / (calendarDays || 1);
+        const ordersPerDay = c.orders / Math.max(calendarDays, 1);
         return {
           key: `ordersPerDay_${c.channel}`,
           label: `${c.channel} Orders/Day`,

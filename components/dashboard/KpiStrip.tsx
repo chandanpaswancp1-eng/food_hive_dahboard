@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { Pencil } from "lucide-react";
 import type { DashboardFilters, KpiValue, TabId } from "@/lib/types";
 import { TAB_ICONS } from "@/lib/tabIcons";
 
@@ -19,9 +20,10 @@ interface Props {
   kpis: KpiValue[];
   activeTab: TabId;
   onDrill?: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
+  onEditCommission?: (channel: string, currentRate: number) => void;
 }
 
-export function KpiStrip({ kpis, activeTab, onDrill }: Props) {
+export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) {
   const Icon = TAB_ICONS[activeTab];
 
   return (
@@ -58,6 +60,19 @@ export function KpiStrip({ kpis, activeTab, onDrill }: Props) {
               } as CSSProperties
             }
           >
+            {k.editCommission && onEditCommission && (
+              <button
+                type="button"
+                className="kpi-edit-btn"
+                title="Edit commission %"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onEditCommission(k.editCommission!.channel, k.editCommission!.currentRate);
+                }}
+              >
+                <Pencil size={12} />
+              </button>
+            )}
             <div className="kpi-icon-badge">
               <Icon size={18} />
             </div>

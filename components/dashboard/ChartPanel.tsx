@@ -4,7 +4,7 @@ import "@/lib/chartSetup";
 import { Bar, Line, Doughnut, Chart } from "react-chartjs-2";
 import type { ChartSpec, DashboardFilters } from "@/lib/types";
 import { dimensionFilter } from "@/lib/drillthrough";
-import { getChartPalette, getGridColor, getInkColor, getSurfaceColor } from "@/lib/theme";
+import { cssVar, getChartPalette, getGridColor, getInkColor, getSurfaceColor } from "@/lib/theme";
 
 // Sums/averages computed via floating-point arithmetic (e.g. 2929.8399999999992)
 // need rounding before display — Chart.js shows raw values otherwise.
@@ -111,7 +111,53 @@ export function ChartPanel({ spec, onSlice }: Props) {
 
   let body: React.ReactNode;
 
-  if (spec.type === "doughnut") {
+  if (spec.type === "gauge") {
+    const surface = getSurfaceColor();
+    const grid = getGridColor();
+    const value = Math.max(0, Math.min(100, spec.datasets[0]?.data[0] ?? 0));
+    // Same red/amber/green read as a standard margin gauge — low take-home
+    // margin is a real warning sign (heavy discounting/commission), not
+    // just a smaller number, so the color should say that at a glance.
+    // Canvas fillStyle can't resolve `var(--x)` itself (unlike DOM CSS), so
+    // these are resolved to real colors the same way the rest of this file's
+    // palette/ink/grid colors are (lib/theme.ts's cssVar).
+    const gaugeColor =
+      value < 40
+        ? cssVar("--danger-500", "#dc2626")
+        : value < 70
+          ? cssVar("--primary-500", "#f79009")
+          : cssVar("--success-500", "#1a9c53");
+    body = (
+      <div className="gauge-wrap">
+        <Doughnut
+          data={{
+            labels: [spec.datasets[0]?.label ?? "Value", "Remaining"],
+            datasets: [
+              {
+                data: [value, 100 - value],
+                backgroundColor: [gaugeColor, grid],
+                borderColor: surface,
+                borderWidth: 2,
+              },
+            ],
+          }}
+          options={{
+            responsive: true,
+            maintainAspectRatio: false,
+            rotation: -90,
+            circumference: 180,
+            cutout: "75%",
+            plugins: { legend: { display: false }, tooltip: { enabled: false } },
+          }}
+        />
+        <div className="gauge-center">
+          <div className="gauge-value" style={{ color: gaugeColor }}>
+            {value.toFixed(1)}%
+          </div>
+        </div>
+      </div>
+    );
+  } else if (spec.type === "doughnut") {
     const surface = getSurfaceColor();
     body = (
       <Doughnut

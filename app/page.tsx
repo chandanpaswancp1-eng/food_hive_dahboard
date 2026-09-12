@@ -6,6 +6,7 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardTabView } from "@/components/dashboard/DashboardTabView";
 import { DrillThroughModal } from "@/components/dashboard/DrillThroughModal";
+import { CommissionModal } from "@/components/dashboard/CommissionModal";
 import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
 
 // Deliberately well under TAB_CACHE_TTL_MS (20s, lib/grubtech/kpis/index.ts)
@@ -27,7 +28,7 @@ function filtersToParams(filters: DashboardFilters): string {
 }
 
 export default function DashboardPage() {
-  const [activeTab, setActiveTab] = useState<TabId>("order-details");
+  const [activeTab, setActiveTab] = useState<TabId>("income");
   const [filters, setFilters] = useState<DashboardFilters>({});
   const [options, setOptions] = useState<FilterOptions | null>(null);
   const [payload, setPayload] = useState<TabPayload | null>(null);
@@ -42,6 +43,7 @@ export default function DashboardPage() {
   // (otherwise completed-only) still needs to drill through as CANCELLED,
   // not whatever the currently active dashboard tab happens to be.
   const [drillTab, setDrillTab] = useState<TabId | null>(null);
+  const [editCommission, setEditCommission] = useState<{ channel: string; currentRate: number } | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [manualSyncing, setManualSyncing] = useState(false);
   // Drives the auto-refresh effects below (filter options, sync status, tab
@@ -172,6 +174,10 @@ export default function DashboardPage() {
     setDrillTab(tabOverride ?? activeTab);
   };
 
+  const handleEditCommission = (channel: string, currentRate: number) => {
+    setEditCommission({ channel, currentRate });
+  };
+
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
     setImporting(true);
     setImportMessage(null);
@@ -278,6 +284,7 @@ export default function DashboardPage() {
               importing={importing}
               onImport={handleImport}
               onDrill={handleDrill}
+              onEditCommission={handleEditCommission}
             />
           )}
         </main>
@@ -290,6 +297,20 @@ export default function DashboardPage() {
           onClose={() => {
             setDrillScope(null);
             setDrillTab(null);
+          }}
+        />
+      )}
+      {editCommission && (
+        <CommissionModal
+          channel={editCommission.channel}
+          currentRate={editCommission.currentRate}
+          onClose={() => setEditCommission(null)}
+          onSaved={() => {
+            setEditCommission(null);
+            // Same refresh mechanism handleManualSync uses: bumping retryTick
+            // re-runs every poll-driven fetch, including the active tab's
+            // KPI payload, so the new rate shows up immediately.
+            setRetryTick((t) => t + 1);
           }}
         />
       )}

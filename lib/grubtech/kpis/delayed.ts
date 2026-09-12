@@ -51,7 +51,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
     0,
   );
   const delayRate = safeDiv(delayedOrders, totalOrders) * 100;
-  const avgPrep = num(overall._avg.actualPrepTime);
+  const avgPrep = overall._avg.actualPrepTime !== null ? num(overall._avg.actualPrepTime) : null;
   const onTimeCompliance = 100 - delayRate;
 
   const statusFlag = (rate: number) => (rate > 20 ? "Critical" : rate > 12 ? "Warning" : rate > 6 ? "Watch" : "Healthy");
@@ -64,7 +64,7 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
         location: dims.locations.get(g.locationId)?.name ?? "Unknown",
         total: g._count._all,
         delayed,
-        avgPrep: num(g._avg.actualPrepTime),
+        avgPrep: g._avg.actualPrepTime !== null ? num(g._avg.actualPrepTime) : null,
       };
     }),
     (v) => safeDiv(v.delayed, v.total),

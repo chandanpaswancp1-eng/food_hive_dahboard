@@ -10,6 +10,7 @@ import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 // own KPI cards — e.g. Order Details' "18 orders" card vs. a same-day
 // drill-through that used to show all 19 (including the cancelled one).
 const TAB_STATUS_FILTER: Partial<Record<TabId, OrderStatus>> = {
+  income: "COMPLETED",
   "order-details": "COMPLETED",
   "prep-time": "COMPLETED",
   delayed: "COMPLETED",

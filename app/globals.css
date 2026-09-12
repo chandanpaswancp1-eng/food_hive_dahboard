@@ -346,6 +346,7 @@ button, input, select {
 }
 
 .kpi-cell {
+  position: relative;
   display: flex;
   gap: var(--space-3);
   align-items: flex-start;
@@ -357,6 +358,28 @@ button, input, select {
   box-shadow: var(--shadow-sm);
   min-width: 0;
   transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.kpi-edit-btn {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+}
+
+.kpi-edit-btn:hover,
+.kpi-edit-btn:focus-visible {
+  background: var(--color-border);
+  color: var(--color-text);
 }
 
 .kpi-cell:hover {
@@ -449,6 +472,34 @@ button, input, select {
 .chart-panel-body {
   position: relative;
   height: 320px;
+}
+
+/* ---- gauge chart ---- */
+
+.gauge-wrap {
+  position: relative;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.gauge-center {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 8%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+
+.gauge-value {
+  font-family: var(--font-heading);
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 
 /* ---- table ---- */

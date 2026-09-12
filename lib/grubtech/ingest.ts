@@ -3,6 +3,7 @@ import { ItemType, OrderStatus, Prisma } from "@prisma/client";
 import { normalizeRawOrder, type NormalizedOrder } from "./normalize";
 import { dubaiDateKey } from "./dubaiTime";
 import { inferCuisineFromBrandName } from "./cuisine";
+import { round2 } from "@/lib/format";
 
 /**
  * Resolving Brand/Location/Channel/CancellationReason per row (4 upserts x
@@ -139,7 +140,7 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     cache.resolveCancellationReason(order.cancellationReason),
   ]);
 
-  const receiptTotal = order.receiptTotal ?? order.netSales;
+  const receiptTotal = order.receiptTotal ?? round2(order.netSales + (order.taxAmount ?? 0));
   const discountAmount = order.discountAmount ?? 0;
   // Column is Decimal(5,2) (max 999.99) — a tiny/near-zero receiptTotal next to a
   // real discountAmount can produce a nonsensical ratio (seen once in a real
@@ -227,7 +228,7 @@ async function persistOrder(order: NormalizedOrder, cache: DimensionCache) {
     await prisma.rating.create({
       data: {
         orderId: saved.id,
-        value: Math.round(order.rating),
+        value: Math.min(5, Math.max(1, Math.round(order.rating))),
         ratedAt: order.deliveredAt ? new Date(order.deliveredAt) : new Date(order.receivedAt),
       },
     });

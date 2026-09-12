@@ -1,4 +1,5 @@
 export const TAB_IDS = [
+  "income",
   "order-details",
   "cancellations",
   "prep-time",
@@ -10,6 +11,7 @@ export const TAB_IDS = [
 export type TabId = (typeof TAB_IDS)[number];
 
 export const TAB_LABELS: Record<TabId, string> = {
+  income: "Income",
   "order-details": "Order Details",
   cancellations: "Cancellations",
   "prep-time": "Prep Time",
@@ -28,6 +30,9 @@ export type ReportTypeHint = "order-details" | "cancelled-orders";
  * no hint — the button falls back to auto-detecting from the file itself.
  */
 export const TAB_IMPORT_CONFIG: Record<TabId, { label: string; hint?: ReportTypeHint }> = {
+  // Income is a pure rollup of Order Details + Cancelled Orders data already
+  // in the DB — it has no distinct source file of its own to import.
+  income: { label: "Import Data" },
   "order-details": { label: "Import Order Details", hint: "order-details" },
   cancellations: { label: "Import Cancelled Orders", hint: "cancelled-orders" },
   "prep-time": { label: "Import Data" },
@@ -64,9 +69,11 @@ export interface KpiValue {
    */
   drillTab?: TabId;
   drillFilter?: Partial<DashboardFilters>;
+  /** Marks this card as commission-rate-editable for `channel`, prefilled with `currentRate` — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
+  editCommission?: { channel: string; currentRate: number };
 }
 
-export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo";
+export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo" | "gauge";
 
 export interface ChartDataset {
   label: string;

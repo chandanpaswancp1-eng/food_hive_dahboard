@@ -15,9 +15,10 @@ interface Props {
   importing: boolean;
   onImport: (file: File, hint?: ReportTypeHint) => void;
   onDrill: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
+  onEditCommission?: (channel: string, currentRate: number) => void;
 }
 
-export function DashboardTabView({ payload, loading, activeTab, importing, onImport, onDrill }: Props) {
+export function DashboardTabView({ payload, loading, activeTab, importing, onImport, onDrill, onEditCommission }: Props) {
   return (
     <>
       <div className="tab-toolbar">
@@ -30,7 +31,7 @@ export function DashboardTabView({ payload, loading, activeTab, importing, onImp
         </div>
       ) : (
         <>
-          <KpiStrip kpis={payload.kpis} activeTab={activeTab} onDrill={onDrill} />
+          <KpiStrip kpis={payload.kpis} activeTab={activeTab} onDrill={onDrill} onEditCommission={onEditCommission} />
           <div className="chart-grid">
             {payload.charts.map((chart) => (
               <ChartPanel key={chart.id} spec={chart} onSlice={onDrill} />
