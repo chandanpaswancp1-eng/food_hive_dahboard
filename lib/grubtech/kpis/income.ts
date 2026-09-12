@@ -14,6 +14,11 @@ import {
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 import { dubaiDateKey } from "@/lib/grubtech/dubaiTime";
 
+// Excluded from the per-portal commission KPI cards: Pickup/Take Away are
+// direct, no-commission channels rather than real third-party portals, and
+// "Grubtech Test" is GrubCenter's own sandbox channel.
+const NON_PORTAL_CHANNELS = new Set(["Pickup", "Take Away", "Grubtech Test"]);
+
 /** Inclusive day count between two "YYYY-MM-DD" calendar-date strings. */
 function daysBetweenInclusive(fromKey: string, toKey: string): number {
   const fromMs = Date.parse(`${fromKey}T00:00:00Z`);
@@ -277,7 +282,11 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       // Commission above blends every channel together, which hides which
       // specific aggregator (Careem, Deliveroo, Noon, ...) is actually
       // taking the bigger cut. Dynamic since the channel set varies.
-      ...channelRows.map((c) => ({
+      // Pickup/Take Away are direct, no-commission channels rather than real
+      // third-party portals, and "Grubtech Test" is GrubCenter's own sandbox
+      // channel — none of the three belong in a per-portal commission
+      // breakdown.
+      ...channelRows.filter((c) => !NON_PORTAL_CHANNELS.has(c.channel)).map((c) => ({
         key: `portalCommission_${c.channel}`,
         label: `${c.channel} Commission`,
         value: fmtCurrencyCompact(c.commission),
