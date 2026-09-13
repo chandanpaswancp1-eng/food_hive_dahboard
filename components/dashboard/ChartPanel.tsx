@@ -159,15 +159,31 @@ export function ChartPanel({ spec, onSlice }: Props) {
     );
   } else if (spec.type === "doughnut") {
     const surface = getSurfaceColor();
+    const sliceValues = spec.datasets[0]?.data ?? [];
+    const sliceTotal = sliceValues.reduce((sum, v) => sum + v, 0);
     body = (
       <Doughnut
         data={{
           labels: spec.labels,
-          datasets: [{ data: spec.datasets[0]?.data ?? [], backgroundColor: palette, borderColor: surface, borderWidth: 2 }],
+          datasets: [{ data: sliceValues, backgroundColor: palette, borderColor: surface, borderWidth: 2 }],
         }}
         options={{
           responsive: true,
           maintainAspectRatio: false,
+          onClick: handleIndexClick
+            ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (_event: any, elements: { index: number }[]) => {
+                if (elements.length > 0) handleIndexClick(elements[0].index);
+              }
+            : undefined,
+          onHover: handleIndexClick
+            ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (event: any, elements: unknown[]) => {
+                if (event.native?.target) {
+                  event.native.target.style.cursor = elements.length ? "pointer" : "default";
+                }
+              }
+            : undefined,
           plugins: {
             legend: { position: "bottom", labels: { color: ink, usePointStyle: true } },
             tooltip: {
@@ -178,7 +194,10 @@ export function ChartPanel({ spec, onSlice }: Props) {
               padding: 10,
               callbacks: {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                label: (ctx: any) => `${ctx.label}: ${formatNumber(ctx.parsed)}`,
+                label: (ctx: any) => {
+                  const pct = sliceTotal > 0 ? (ctx.parsed / sliceTotal) * 100 : 0;
+                  return `${ctx.label}: ${formatNumber(ctx.parsed)} (${pct.toFixed(1)}%)`;
+                },
               },
             },
           },

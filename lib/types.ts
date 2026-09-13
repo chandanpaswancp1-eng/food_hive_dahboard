@@ -82,7 +82,7 @@ export interface ChartDataset {
   yAxisId?: "y" | "y1";
 }
 
-export type DrillDimension = "brand" | "location" | "channel" | "cuisine" | "date";
+export type DrillDimension = "brand" | "location" | "channel" | "cuisine" | "date" | "payment";
 
 export interface ChartSpec {
   id: string;

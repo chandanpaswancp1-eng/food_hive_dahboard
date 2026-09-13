@@ -13,6 +13,8 @@ export function dimensionFilter(dimension: DrillDimension, value: string): Parti
       return { cuisines: [value] };
     case "date":
       return { dateFrom: value, dateTo: value };
+    case "payment":
+      return { paymentMethods: [value] };
   }
 }
 
