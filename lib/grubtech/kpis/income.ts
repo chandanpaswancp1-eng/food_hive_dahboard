@@ -12,7 +12,7 @@ import {
   safeDiv,
 } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
-import { dubaiDateKey } from "@/lib/grubtech/dubaiTime";
+import { dubaiDateKey, daysInDubaiMonth } from "@/lib/grubtech/dubaiTime";
 
 // Excluded from the per-portal commission KPI cards: Pickup/Take Away are
 // direct, no-commission channels rather than real third-party portals, and
@@ -119,15 +119,25 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
   const takeHomeIncome = round2(netSales - totalCommission);
   const takeHomeMarginPct = safeDiv(takeHomeIncome, grossRevenue) * 100;
 
+  // A "Received To" date in the future (the picker has no max) would count
+  // calendar days that haven't happened yet — days that structurally can't
+  // have orders — diluting avgDailyIncome/projectedMonthlyIncome below.
+  // Clamp to today so only actually-elapsed days count.
+  const todayKey = dubaiDateKey(new Date());
+  const effectiveDateTo = filters.dateTo && filters.dateTo > todayKey ? todayKey : filters.dateTo;
   const explicitRangeDays =
-    filters.dateFrom && filters.dateTo ? daysBetweenInclusive(filters.dateFrom, filters.dateTo) : null;
+    filters.dateFrom && filters.dateTo ? daysBetweenInclusive(filters.dateFrom, effectiveDateTo!) : null;
   const minReceivedAt = totals._min.receivedAt;
   const maxReceivedAt = totals._max.receivedAt;
   const actualSpanDays =
     minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
   const calendarDays = explicitRangeDays ?? actualSpanDays;
   const avgDailyIncome = takeHomeIncome / Math.max(calendarDays, 1);
-  const projectedMonthlyIncome = avgDailyIncome * 30;
+  // The month actually being projected: the one containing the scoped
+  // range's (clamped) end date, or today when there's no explicit range —
+  // not a flat 30, which quietly under-projects a 31-day month and
+  // over-projects February.
+  const projectedMonthlyIncome = avgDailyIncome * daysInDubaiMonth(effectiveDateTo ?? todayKey);
 
   // ---- channel breakdown ----
   const channelRows = sortDesc(
@@ -361,6 +371,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         id: "income-by-payment-method",
         title: "Net Sales by Payment Method",
         type: "doughnut",
+        dimension: "payment",
         labels: paymentRows.map((p) => p.method),
         datasets: [{ label: "Net Sales", data: paymentRows.map((p) => p.netSales) }],
       },

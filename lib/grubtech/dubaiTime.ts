@@ -56,6 +56,21 @@ export function dubaiDateBoundaryToUtc(dateStr: string, end: boolean): Date {
 }
 
 /**
+ * Number of calendar days in the month containing a "YYYY-MM-DD" Dubai-local
+ * date — e.g. 31 for any date in September, 28/29 for February. Dubai's
+ * fixed UTC+4 offset (no DST) means a calendar month's length is identical
+ * in Dubai-local and UTC, so this is a plain date calculation with no
+ * timezone shifting needed. `Date.UTC(year, month, 0)` — `month` here is
+ * the 1-indexed month from the date key, which `Date.UTC` (0-indexed) reads
+ * as "next month" — day 0 of that next month rolls back to the last day of
+ * the target month.
+ */
+export function daysInDubaiMonth(dateKey: string): number {
+  const [year, month] = dateKey.split("-").map(Number);
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+
+/**
  * Re-sets an instant's Dubai-local hour (minutes/seconds zeroed) while
  * keeping its Dubai-local calendar day fixed, returning the resulting UTC
  * instant. Used when a separate "hour" column overrides a date-only

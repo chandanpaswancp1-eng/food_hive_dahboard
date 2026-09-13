@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import type { TabPayload, DashboardFilters } from "@/lib/types";
 import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
-import { dubaiDateKey } from "@/lib/grubtech/dubaiTime";
+import { dubaiDateKey, daysInDubaiMonth } from "@/lib/grubtech/dubaiTime";
 
 const DAY_ORDER = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -125,15 +125,26 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
   // Prefer the explicitly selected date range when both ends are set (the
   // user's chosen period, zero-order days and all); otherwise fall back to
   // the actual first-to-last order span for whatever's currently in scope.
+  // A "Received To" date in the future (the picker has no max) would count
+  // calendar days that haven't happened yet — days that structurally can't
+  // have orders — diluting avgRunRate/projectedMonth below. Clamp to today
+  // so only actually-elapsed days count, without touching the real
+  // zero-order-day-inclusion behavior above for a fully past range.
+  const todayKey = dubaiDateKey(new Date());
+  const effectiveDateTo = filters.dateTo && filters.dateTo > todayKey ? todayKey : filters.dateTo;
   const explicitRangeDays =
-    filters.dateFrom && filters.dateTo ? daysBetweenInclusive(filters.dateFrom, filters.dateTo) : null;
+    filters.dateFrom && filters.dateTo ? daysBetweenInclusive(filters.dateFrom, effectiveDateTo!) : null;
   const minReceivedAt = totals._min.receivedAt;
   const maxReceivedAt = totals._max.receivedAt;
   const actualSpanDays =
     minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
   const calendarDays = explicitRangeDays ?? actualSpanDays;
   const avgRunRate = netSales / Math.max(calendarDays, 1);
-  const projectedMonth = avgRunRate * 30;
+  // The month actually being projected: the one containing the scoped
+  // range's (clamped) end date, or today when there's no explicit range —
+  // not a flat 30, which quietly under-projects a 31-day month and
+  // over-projects February.
+  const projectedMonth = avgRunRate * daysInDubaiMonth(effectiveDateTo ?? todayKey);
 
   const brandRows = sortDesc(
     byBrandGroups.map((g) => ({
