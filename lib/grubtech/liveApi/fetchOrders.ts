@@ -70,6 +70,15 @@ function orderKey(row: Record<string, unknown>): string | null {
  * recognize (e.g. "Sales Amount"/"Sales After Tax", the exact labels
  * GrubCenter's own Cancelled Orders report uses for these two figures) —
  * no changes needed in normalize.ts itself.
+ *
+ * `grossAmount`/`netAmount` map to our `netSales`/`receiptTotal` fields by
+ * VALUE, not by name — every completed order has receiptTotal (tax-inclusive)
+ * >= netSales (tax-exclusive), so the raw endpoint's larger "gross" figure
+ * belongs in our receiptTotal and its smaller "net" figure belongs in our
+ * netSales, matching the completed-order convention. Verified against real
+ * cancelled rows: netAmount = grossAmount / 1.05 (the VAT rate) in every
+ * sampled case, confirming grossAmount is the tax-inclusive total and
+ * netAmount the tax-exclusive one.
  */
 function normalizeCancelledRow(raw: unknown): Record<string, unknown> {
   const row = raw as Record<string, unknown>;
@@ -78,8 +87,8 @@ function normalizeCancelledRow(raw: unknown): Record<string, unknown> {
     orderId: row.uniqueOrderId,
     orderNumber: row.orderId,
     receivedAt: row.date,
-    "Sales Amount": row.grossAmount,
-    "Sales After Tax": row.netAmount,
+    "Sales Amount": row.netAmount,
+    "Sales After Tax": row.grossAmount,
     "Order Status": "Cancelled",
     "Post Cancelled": row.postCancelled,
     deliveryPartner: row.cancellationSource,
