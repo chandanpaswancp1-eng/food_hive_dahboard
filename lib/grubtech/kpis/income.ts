@@ -95,7 +95,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     prisma.order.groupBy({
       by: ["paymentMethod"],
       where,
-      _sum: { netSales: true },
+      _sum: { netSales: true, receiptTotal: true },
       _count: { _all: true },
     }),
   ]);
@@ -239,11 +239,20 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
   const paymentRows = sortDesc(
     byPaymentGroups
       .filter((g): g is typeof g & { paymentMethod: string } => Boolean(g.paymentMethod))
-      .map((g) => ({ method: g.paymentMethod, netSales: num(g._sum.netSales), orders: g._count._all })),
+      .map((g) => ({
+        method: g.paymentMethod,
+        netSales: num(g._sum.netSales),
+        receiptTotal: num(g._sum.receiptTotal),
+        orders: g._count._all,
+      })),
     (v) => v.netSales,
   );
-  const cashAmount = paymentRows.find((p) => p.method === "CASH")?.netSales ?? 0;
-  const cardAmount = paymentRows.find((p) => p.method === "CARD")?.netSales ?? 0;
+  // "Amount received" means the real, VAT-inclusive money that changed
+  // hands (receiptTotal) — not netSales, which has VAT stripped out for
+  // accounting. Confirmed against the DB: netSales understates CASH/CARD
+  // received by exactly the VAT portion of those orders.
+  const cashAmount = paymentRows.find((p) => p.method === "CASH")?.receiptTotal ?? 0;
+  const cardAmount = paymentRows.find((p) => p.method === "CARD")?.receiptTotal ?? 0;
 
   return {
     kpis: [
