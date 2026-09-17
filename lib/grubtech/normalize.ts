@@ -250,6 +250,13 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
   if (/\bKSA\b/i.test(data.brand)) {
     return { ok: false, issues: [`brand: KSA branch excluded (${data.brand})`], raw };
   }
+  // GrubCenter's live feed periodically re-emits a recurring sandbox/test
+  // fixture under this exact brand+channel pair, each time with a fresh
+  // order id — deleting the resulting rows doesn't stop it from coming
+  // back on the next sync, so it's excluded here instead.
+  if (data.brand.trim().toUpperCase() === "TEST BRAND" || data.channel.trim().toUpperCase() === "GRUBTECH TEST") {
+    return { ok: false, issues: [`brand/channel: GrubCenter test fixture excluded (${data.brand} / ${data.channel})`], raw };
+  }
 
   let receivedDate = new Date(data.receivedAt);
   if (receivedDate.getTime() > Date.now()) {

@@ -140,6 +140,10 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
     minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
   const calendarDays = explicitRangeDays ?? actualSpanDays;
   const avgRunRate = netSales / Math.max(calendarDays, 1);
+  // Overall counterpart to the per-channel Orders/Day cards below — same
+  // true calendar-day denominator (not days-with-orders) so it doesn't
+  // inflate the average the way dividing by dateRows.length would.
+  const avgOrdersPerDay = totalOrders / Math.max(calendarDays, 1);
   // The month actually being projected: the one containing the scoped
   // range's (clamped) end date, or today when there's no explicit range —
   // not a flat 30, which quietly under-projects a 31-day month and
@@ -265,6 +269,12 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
         label: "Avg Run Rate",
         value: `${fmtCurrencyCompact(avgRunRate)}/day`,
         fullValue: `${fmtCurrencyExact(avgRunRate)}/day`,
+      },
+      {
+        key: "avgOrdersPerDay",
+        label: "Avg Orders/Day",
+        value: `${avgOrdersPerDay.toFixed(2)}/day`,
+        subtitle: `${fmtNumber(totalOrders)} orders total, across all portals`,
       },
       // A single-day range (e.g. the "Today" filter) makes a month
       // projection genuinely misleading — a naive x30 extrapolation of one
