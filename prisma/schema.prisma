@@ -52,6 +52,7 @@ model Channel {
   name           String          @unique
   channelType    String?
   commissionRate Decimal?        @db.Decimal(5, 2)
+  deliveryChargeRate Decimal?    @db.Decimal(5, 2)
   orders         Order[]
   stockouts      StockoutEvent[]
   createdAt      DateTime        @default(now())

@@ -27,16 +27,20 @@ function daysBetweenInclusive(fromKey: string, toKey: string): number {
 }
 
 /**
- * GrubCenter's channel commission % is only known per channel, never per
- * order — so "what we actually took home" for any slice (a month, a brand)
- * has to be built by re-attributing that one channel-level rate across
- * whichever other dimension we're slicing by, via a join groupBy against
- * channelId rather than a single flat sum.
+ * GrubCenter's channel commission % and delivery-charge % are only known per
+ * channel, never per order — so "what we actually took home" for any slice
+ * (a month, a brand) has to be built by re-attributing those channel-level
+ * rates across whichever other dimension we're slicing by, via a join
+ * groupBy against channelId rather than a single flat sum. The two rates are
+ * combined into one deduction here — real portals deduct both a commission
+ * cut and a separate delivery/logistics fee, and the dashboard reports them
+ * as a single "commission" figure everywhere except the per-portal card
+ * subtitle, which still breaks the two back out for transparency.
  */
-function buildCommissionRateMap(
-  channels: { id: string; commissionRate: Prisma.Decimal | null }[],
+function buildCombinedRateMap(
+  channels: { id: string; commissionRate: Prisma.Decimal | null; deliveryChargeRate: Prisma.Decimal | null }[],
 ): Map<string, number> {
-  return new Map(channels.map((c) => [c.id, Number(c.commissionRate ?? 0)]));
+  return new Map(channels.map((c) => [c.id, Number(c.commissionRate ?? 0) + Number(c.deliveryChargeRate ?? 0)]));
 }
 
 export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters: DashboardFilters): Promise<TabPayload> {
@@ -63,7 +67,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       _max: { receivedAt: true },
     }),
     loadDimensionMaps(),
-    prisma.channel.findMany({ select: { id: true, commissionRate: true } }),
+    prisma.channel.findMany({ select: { id: true, commissionRate: true, deliveryChargeRate: true } }),
     prisma.order.groupBy({
       by: ["brandId"],
       where,
@@ -100,7 +104,12 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     }),
   ]);
 
-  const rateByChannel = buildCommissionRateMap(channels);
+  const rateByChannel = buildCombinedRateMap(channels);
+  // Per-component lookups, kept alongside the combined map above only for
+  // the per-portal KPI card's breakdown subtitle — every other consumer
+  // (brand/month re-attribution, totals, tables) uses the combined rate.
+  const commissionRateByChannel = new Map(channels.map((c) => [c.id, Number(c.commissionRate ?? 0)]));
+  const deliveryChargeRateByChannel = new Map(channels.map((c) => [c.id, Number(c.deliveryChargeRate ?? 0)]));
 
   const netSales = num(totals._sum.netSales);
   const receiptTotal = num(totals._sum.receiptTotal);
@@ -112,8 +121,18 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
 
   const channelCommissions = byChannelGroups.map((g) => {
     const chNetSales = num(g._sum.netSales);
-    const rate = rateByChannel.get(g.channelId) ?? 0;
-    return { channelId: g.channelId, netSales: chNetSales, orders: g._count._all, rate, commission: round2(chNetSales * (rate / 100)) };
+    const commissionRate = commissionRateByChannel.get(g.channelId) ?? 0;
+    const deliveryChargeRate = deliveryChargeRateByChannel.get(g.channelId) ?? 0;
+    const rate = commissionRate + deliveryChargeRate;
+    return {
+      channelId: g.channelId,
+      netSales: chNetSales,
+      orders: g._count._all,
+      rate,
+      commissionRate,
+      deliveryChargeRate,
+      commission: round2(chNetSales * (rate / 100)),
+    };
   });
   const totalCommission = round2(channelCommissions.reduce((sum, c) => sum + c.commission, 0));
   const takeHomeIncome = round2(netSales - totalCommission);
@@ -146,6 +165,8 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       netSales: c.netSales,
       orders: c.orders,
       rate: c.rate,
+      commissionRate: c.commissionRate,
+      deliveryChargeRate: c.deliveryChargeRate,
       commission: c.commission,
       takeHome: round2(c.netSales - c.commission),
     })),
@@ -262,7 +283,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         label: "Take-Home Income",
         value: fmtCurrencyCompact(takeHomeIncome),
         fullValue: fmtCurrencyExact(takeHomeIncome),
-        subtitle: "Net sales minus platform commission",
+        subtitle: "Net sales minus platform commission & delivery charge",
       },
       { key: "grossRevenue", label: "Gross Revenue", value: fmtCurrencyCompact(grossRevenue), fullValue: fmtCurrencyExact(grossRevenue) },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
@@ -312,10 +333,14 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         label: `${c.channel} Commission`,
         value: fmtCurrencyCompact(c.commission),
         fullValue: fmtCurrencyExact(c.commission),
-        subtitle: `${fmtPercent(c.rate)} of ${fmtCurrencyCompact(c.netSales)} net sales`,
+        subtitle: `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery of ${fmtCurrencyCompact(c.netSales)} net sales`,
         accent: true,
         drillFilter: { channels: [c.channel] },
-        editCommission: { channel: c.channel, currentRate: c.rate },
+        editCommission: {
+          channel: c.channel,
+          currentCommissionRate: c.commissionRate,
+          currentDeliveryChargeRate: c.deliveryChargeRate,
+        },
       })),
 
       // Group 6 — cash vs. card actually handed over at the point of sale,
@@ -443,7 +468,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         title: "Income by Channel",
         columns: [
           { key: "channel", label: "Channel" },
-          { key: "rate", label: "Commission Rate", align: "right" },
+          { key: "rate", label: "Commission + Delivery Rate", align: "right" },
           { key: "netSales", label: "Net Sales", align: "right" },
           { key: "commission", label: "Commission", align: "right" },
           { key: "takeHome", label: "Take-Home Income", align: "right" },
@@ -451,7 +476,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         ],
         rows: channelRows.map((c) => ({
           channel: c.channel,
-          rate: fmtPercent(c.rate),
+          rate: `${fmtPercent(c.commissionRate)} + ${fmtPercent(c.deliveryChargeRate)}`,
           netSales: fmtCurrency(c.netSales),
           commission: fmtCurrency(c.commission),
           takeHome: fmtCurrency(c.takeHome),

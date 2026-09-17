@@ -69,8 +69,8 @@ export interface KpiValue {
    */
   drillTab?: TabId;
   drillFilter?: Partial<DashboardFilters>;
-  /** Marks this card as commission-rate-editable for `channel`, prefilled with `currentRate` — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
-  editCommission?: { channel: string; currentRate: number };
+  /** Marks this card as commission-rate-editable for `channel`, prefilled with both current rates — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
+  editCommission?: { channel: string; currentCommissionRate: number; currentDeliveryChargeRate: number };
 }
 
 export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo" | "gauge";
@@ -105,6 +105,26 @@ export interface TableSpec {
   title: string;
   columns: TableColumn[];
   rows: Record<string, string | number>[];
+  /**
+   * When set, this table's rows don't map to an Orders filter dimension
+   * (brand/location/channel/cuisine) — clicking a row should instead open a
+   * StockoutDrillModal for the item named in this column key, rather than
+   * the Orders-based DrillThroughModal. See "Most 86'd Items"
+   * (lib/grubtech/kpis/stockouts.ts): its rows are per-item, and there's no
+   * "filter orders by item" dimension, so a real drill-through here means
+   * showing that item's own 86'd-episode history, not orders/sales.
+   */
+  itemDrillKey?: string;
+}
+
+export interface StockoutEpisode {
+  id: string;
+  brand: string;
+  location: string;
+  markedUnavailableAt: string;
+  restoredAt: string | null;
+  durationMinutes: number | null;
+  source: string | null;
 }
 
 export interface TabPayload {
@@ -136,6 +156,35 @@ export interface SyncStatusPayload {
   /** Whether the grubcenter-live agent is current (within 2x its 10-minute cadence) — null when mode is "none". */
   healthy: boolean | null;
   message?: string;
+}
+
+export interface PortalStatus {
+  /** Matches a Channel.name, e.g. "Deliveroo" */
+  channel: string;
+  /** null means not connected (no API credentials configured yet) or the last fetch failed — distinct from a real "closed" reading. */
+  isOpen: boolean | null;
+  message: string;
+}
+
+export interface PortalStatusPayload {
+  portals: PortalStatus[];
+  fetchedAt: string;
+}
+
+export interface AlertItem {
+  /** Stable across polls so the client can diff "new since last poll" and track dismissals — "portal:<channel>" or "stockout:<StockoutEvent id>". */
+  id: string;
+  kind: "portal-closed" | "item-86d";
+  severity: "danger" | "warning";
+  title: string;
+  detail: string;
+  /** ISO timestamp the underlying condition started (portal payload's fetchedAt, or the stockout's markedUnavailableAt). */
+  since: string;
+}
+
+export interface AlertsPayload {
+  alerts: AlertItem[];
+  fetchedAt: string;
 }
 
 export interface JobStatusPayload {

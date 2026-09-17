@@ -20,7 +20,7 @@ interface Props {
   kpis: KpiValue[];
   activeTab: TabId;
   onDrill?: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
-  onEditCommission?: (channel: string, currentRate: number) => void;
+  onEditCommission?: (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => void;
 }
 
 export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) {
@@ -67,7 +67,11 @@ export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) 
                 title="Edit commission %"
                 onClick={(e) => {
                   e.stopPropagation();
-                  onEditCommission(k.editCommission!.channel, k.editCommission!.currentRate);
+                  onEditCommission(
+                    k.editCommission!.channel,
+                    k.editCommission!.currentCommissionRate,
+                    k.editCommission!.currentDeliveryChargeRate,
+                  );
                 }}
               >
                 <Pencil size={12} />
