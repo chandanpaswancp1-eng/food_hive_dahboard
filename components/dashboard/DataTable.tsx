@@ -28,7 +28,7 @@ export function DataTable({ spec, onRowClick }: Props) {
           </thead>
           <tbody>
             {spec.rows.map((row, i) => (
-              <tr key={i} onClick={() => onRowClick?.(row)}>
+              <tr key={i} className={onRowClick ? "clickable" : undefined} onClick={() => onRowClick?.(row)}>
                 {spec.columns.map((c) => (
                   <td key={c.key} className={c.align === "right" ? "num" : undefined}>
                     {row[c.key]}

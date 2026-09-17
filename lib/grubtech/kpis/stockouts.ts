@@ -62,6 +62,7 @@ export function buildStockoutsTab(events: LoadedStockout[], orderCount: number):
     ],
     table: {
       title: "Most 86'd Items",
+      itemDrillKey: "item",
       columns: [
         { key: "item", label: "Item" },
         { key: "count", label: "Count", align: "right" },

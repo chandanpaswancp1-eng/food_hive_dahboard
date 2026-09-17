@@ -13,7 +13,8 @@
     "playwright:install": "playwright install chromium",
     "discover:grubcenter": "dotenv -e .env.local -- tsx scraper/discover.ts",
     "backfill:dubai-calendar": "dotenv -e .env.local -- tsx scripts/backfillDubaiCalendarFields.ts",
-    "resync:full": "dotenv -e .env.local -- tsx scripts/fullResync.ts"
+    "resync:full": "dotenv -e .env.local -- tsx scripts/fullResync.ts",
+    "cleanup:stockout-duplicates": "dotenv -e .env.local -- tsx scripts/mergeDuplicateStockoutEpisodes.ts"
   },
   "dependencies": {
     "@prisma/client": "6.19.3",

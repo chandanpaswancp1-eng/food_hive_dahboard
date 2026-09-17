@@ -1,12 +1,16 @@
 "use client";
 
 import { CheckCircle2, Circle, AlertCircle, Loader2, Download, RefreshCw } from "lucide-react";
-import type { SyncStatusPayload, TabId } from "@/lib/types";
+import type { AlertsPayload, PortalStatusPayload, SyncStatusPayload, TabId } from "@/lib/types";
 import { TAB_LABELS } from "@/lib/types";
 import { fmtTimeGst } from "@/lib/format";
+import { PortalStatusStrip } from "./PortalStatusStrip";
+import { AlertCenter } from "./AlertCenter";
 
 interface Props {
   sync: SyncStatusPayload | null;
+  portalStatus: PortalStatusPayload | null;
+  alerts: AlertsPayload | null;
   onExport: () => void;
   onManualSync: () => void;
   manualSyncing: boolean;
@@ -14,7 +18,7 @@ interface Props {
   activeTab: TabId;
 }
 
-export function Header({ sync, onExport, onManualSync, manualSyncing, importMessage, activeTab }: Props) {
+export function Header({ sync, portalStatus, alerts, onExport, onManualSync, manualSyncing, importMessage, activeTab }: Props) {
   const mode = sync?.mode ?? "none";
   const source = sync?.source ?? null;
   const healthy = sync?.healthy ?? null;
@@ -54,6 +58,8 @@ export function Header({ sync, onExport, onManualSync, manualSyncing, importMess
     <header className="app-header">
       <h2 className="header-title">{TAB_LABELS[activeTab]}</h2>
       <div className="header-actions">
+        <AlertCenter status={alerts} />
+        <PortalStatusStrip status={portalStatus} />
         <div className="sync-pill" title={sync?.message ?? undefined}>
           <Icon className={`sync-icon ${iconClass}`} size={14} />
           <span>{label}</span>

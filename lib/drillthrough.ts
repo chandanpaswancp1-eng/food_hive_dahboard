@@ -1,4 +1,4 @@
-import type { DashboardFilters, DrillDimension } from "./types";
+import type { DashboardFilters, DrillDimension, TableSpec } from "./types";
 
 /** Maps a clicked chart label (for a dimension-tagged chart) to a filter override. */
 export function dimensionFilter(dimension: DrillDimension, value: string): Partial<DashboardFilters> {
@@ -39,4 +39,19 @@ export function filterFromTableRow(row: Record<string, string | number>): Partia
     }
   }
   return override;
+}
+
+/**
+ * Whether a table's rows carry any dimension filterFromTableRow actually
+ * knows how to turn into a filter (brand/location/channel/cuisine). Tables
+ * keyed by something else — e.g. "Most 86'd Items" (item name), "Cancellation
+ * Reasons" (reason), or a date/month/quarter breakdown — have no matching
+ * DashboardFilters field, so drilling through them silently opened a modal
+ * scoped to nothing but the *global* filters already in effect: it looked
+ * like item-specific data but was actually just unfiltered sales. Used to
+ * gate whether a table's rows should be clickable at all, rather than
+ * offering a "drill through" that quietly does nothing useful.
+ */
+export function isDrillableTable(spec: TableSpec): boolean {
+  return spec.columns.some((c) => c.key in ROW_KEY_TO_FILTER);
 }

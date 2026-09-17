@@ -6,8 +6,18 @@ import { FilterBar } from "@/components/dashboard/FilterBar";
 import { Sidebar } from "@/components/dashboard/Sidebar";
 import { DashboardTabView } from "@/components/dashboard/DashboardTabView";
 import { DrillThroughModal } from "@/components/dashboard/DrillThroughModal";
+import { StockoutDrillModal } from "@/components/dashboard/StockoutDrillModal";
 import { CommissionModal } from "@/components/dashboard/CommissionModal";
-import type { DashboardFilters, FilterOptions, ReportTypeHint, SyncStatusPayload, TabId, TabPayload } from "@/lib/types";
+import type {
+  AlertsPayload,
+  DashboardFilters,
+  FilterOptions,
+  PortalStatusPayload,
+  ReportTypeHint,
+  SyncStatusPayload,
+  TabId,
+  TabPayload,
+} from "@/lib/types";
 
 // Deliberately well under TAB_CACHE_TTL_MS (20s, lib/grubtech/kpis/index.ts)
 // — the cache, not this interval, is what bounds actual DB load, so keeping
@@ -34,6 +44,8 @@ export default function DashboardPage() {
   const [payload, setPayload] = useState<TabPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [sync, setSync] = useState<SyncStatusPayload | null>(null);
+  const [portalStatus, setPortalStatus] = useState<PortalStatusPayload | null>(null);
+  const [alerts, setAlerts] = useState<AlertsPayload | null>(null);
   const [todayGst, setTodayGst] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const [importMessage, setImportMessage] = useState<string | null>(null);
@@ -43,7 +55,12 @@ export default function DashboardPage() {
   // (otherwise completed-only) still needs to drill through as CANCELLED,
   // not whatever the currently active dashboard tab happens to be.
   const [drillTab, setDrillTab] = useState<TabId | null>(null);
-  const [editCommission, setEditCommission] = useState<{ channel: string; currentRate: number } | null>(null);
+  const [itemDrillTarget, setItemDrillTarget] = useState<string | null>(null);
+  const [editCommission, setEditCommission] = useState<{
+    channel: string;
+    currentCommissionRate: number;
+    currentDeliveryChargeRate: number;
+  } | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [manualSyncing, setManualSyncing] = useState(false);
   // Drives the auto-refresh effects below (filter options, sync status, tab
@@ -108,6 +125,28 @@ export default function DashboardPage() {
   useEffect(() => {
     loadSyncStatus();
   }, [loadSyncStatus, retryTick]);
+
+  const loadPortalStatus = useCallback(() => {
+    fetch("/api/channels/status")
+      .then((r) => r.json())
+      .then(setPortalStatus)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadPortalStatus();
+  }, [loadPortalStatus, retryTick]);
+
+  const loadAlerts = useCallback(() => {
+    fetch("/api/alerts")
+      .then((r) => r.json())
+      .then(setAlerts)
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    loadAlerts();
+  }, [loadAlerts, retryTick]);
 
   useEffect(() => {
     // Re-fetched on the same tick as everything else so the "Today" button
@@ -174,8 +213,12 @@ export default function DashboardPage() {
     setDrillTab(tabOverride ?? activeTab);
   };
 
-  const handleEditCommission = (channel: string, currentRate: number) => {
-    setEditCommission({ channel, currentRate });
+  const handleItemDrill = (item: string) => {
+    setItemDrillTarget(item);
+  };
+
+  const handleEditCommission = (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => {
+    setEditCommission({ channel, currentCommissionRate, currentDeliveryChargeRate });
   };
 
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
@@ -253,6 +296,8 @@ export default function DashboardPage() {
       <div className="app-content">
         <Header
           sync={sync}
+          portalStatus={portalStatus}
+          alerts={alerts}
           onExport={handleExport}
           onManualSync={handleManualSync}
           manualSyncing={manualSyncing}
@@ -284,6 +329,7 @@ export default function DashboardPage() {
               importing={importing}
               onImport={handleImport}
               onDrill={handleDrill}
+              onItemDrill={handleItemDrill}
               onEditCommission={handleEditCommission}
             />
           )}
@@ -300,10 +346,14 @@ export default function DashboardPage() {
           }}
         />
       )}
+      {itemDrillTarget && (
+        <StockoutDrillModal item={itemDrillTarget} filters={filters} onClose={() => setItemDrillTarget(null)} />
+      )}
       {editCommission && (
         <CommissionModal
           channel={editCommission.channel}
-          currentRate={editCommission.currentRate}
+          currentRate={editCommission.currentCommissionRate}
+          currentDeliveryChargeRate={editCommission.currentDeliveryChargeRate}
           onClose={() => setEditCommission(null)}
           onSaved={() => {
             setEditCommission(null);
