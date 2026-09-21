@@ -13,6 +13,7 @@ const TAB_STATUS_FILTER: Partial<Record<TabId, OrderStatus>> = {
   income: "COMPLETED",
   "order-details": "COMPLETED",
   weekly: "COMPLETED",
+  monthly: "COMPLETED",
   "prep-time": "COMPLETED",
   delayed: "COMPLETED",
   cancellations: "CANCELLED",

@@ -10,6 +10,7 @@ import { buildDelayedTab } from "./delayed";
 import { buildStockoutsTab } from "./stockouts";
 import { buildIncomeTab } from "./income";
 import { buildWeeklyTab } from "./weekly";
+import { buildMonthlyTab } from "./monthly";
 
 const TAB_CACHE_TTL_MS = 20_000;
 const tabCache = new Map<string, { data: TabPayload; expiresAt: number }>();
@@ -27,6 +28,10 @@ async function computeTabPayload(tab: TabId, filters: DashboardFilters): Promise
   // few weeks, so the shared unscoped `where` below isn't what it wants.
   if (tab === "weekly") {
     return buildWeeklyTab(filters);
+  }
+  // Same reason: its default range starts at the first day with orders.
+  if (tab === "monthly") {
+    return buildMonthlyTab(filters);
   }
 
   const where = buildOrderWhere(filters);

@@ -2,6 +2,7 @@ export const TAB_IDS = [
   "income",
   "order-details",
   "weekly",
+  "monthly",
   "cancellations",
   "prep-time",
   "ratings",
@@ -15,6 +16,7 @@ export const TAB_LABELS: Record<TabId, string> = {
   income: "Income",
   "order-details": "Order Details",
   weekly: "Weekly Comparison",
+  monthly: "Monthly Comparison",
   cancellations: "Cancellations",
   "prep-time": "Prep Time",
   ratings: "Ratings",
@@ -38,6 +40,7 @@ export const TAB_IMPORT_CONFIG: Record<TabId, { label: string; hint?: ReportType
   "order-details": { label: "Import Order Details", hint: "order-details" },
   // Like Income, a pure rollup of Order Details data already in the DB.
   weekly: { label: "Import Data" },
+  monthly: { label: "Import Data" },
   cancellations: { label: "Import Cancelled Orders", hint: "cancelled-orders" },
   "prep-time": { label: "Import Data" },
   ratings: { label: "Import Data" },

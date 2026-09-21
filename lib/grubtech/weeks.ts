@@ -14,19 +14,25 @@ const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "
 /** Hard cap on weeks in one view — beyond this the charts/tables stop being comparable at a glance. */
 export const MAX_WEEKS = 12;
 
-export interface WeekBucket {
+/**
+ * One comparison period — a week here, a calendar month in months.ts — so the
+ * shared builder (kpis/comparison.ts) can treat both the same way.
+ */
+export interface PeriodBucket {
   /** 0-based position in the range. */
   index: number;
-  /** "Week 1", "Week 2", ... */
+  /** "Week 1", "Week 2", ... (or "Aug 2026" for a month). */
   label: string;
-  /** "W1", "W2", ... — compact form for card subtitles. */
+  /** "W1", "W2", ... (or "Aug") — compact form for card subtitles. */
   shortLabel: string;
   /** First day of the week. */
   start: string;
   /** Last day of the week inside the range (clipped to the range end for the last week). */
   end: string;
-  /** Days in the bucket — 7 for a full week. */
+  /** Days of the period inside the range. */
   days: number;
+  /** Days the period has when complete — 7 for a week, 28-31 for a month. `days < fullDays` marks a partial one. */
+  fullDays: number;
   /** e.g. "1–7 Sep" or "29 Sep – 5 Oct". */
   rangeLabel: string;
 }
@@ -48,7 +54,7 @@ function fmtDay(key: string): string {
   return `${day} ${MONTHS[month - 1]}`;
 }
 
-function fmtRange(start: string, end: string): string {
+export function fmtRange(start: string, end: string): string {
   if (start === end) return fmtDay(start);
   const [, startMonth, startDay] = start.split("-").map(Number);
   const [, endMonth] = end.split("-").map(Number);
@@ -86,8 +92,8 @@ export function resolveWeeklyRange(
  * Only the last week can be shorter than 7 days — the month's leftover days,
  * or the week still in progress. Weeks with zero orders are included.
  */
-export function buildWeeks(from: string, to: string): WeekBucket[] {
-  const weeks: WeekBucket[] = [];
+export function buildWeeks(from: string, to: string): PeriodBucket[] {
+  const weeks: PeriodBucket[] = [];
   for (let start = from; start <= to; start = addDays(start, 7)) {
     const sunday = addDays(start, 6);
     const end = sunday > to ? to : sunday;
@@ -99,6 +105,7 @@ export function buildWeeks(from: string, to: string): WeekBucket[] {
       start,
       end,
       days: Math.round((toMs(end) - toMs(start)) / DAY_MS) + 1,
+      fullDays: 7,
       rangeLabel: fmtRange(start, end),
     });
   }
@@ -106,6 +113,6 @@ export function buildWeeks(from: string, to: string): WeekBucket[] {
 }
 
 /** Index of the bucket a date key falls in, or -1 if it's outside every bucket. */
-export function bucketIndexOf(dateKey: string, weeks: WeekBucket[]): number {
+export function bucketIndexOf(dateKey: string, weeks: PeriodBucket[]): number {
   return weeks.findIndex((w) => dateKey >= w.start && dateKey <= w.end);
 }
