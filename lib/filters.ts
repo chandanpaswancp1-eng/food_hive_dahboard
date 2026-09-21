@@ -1,6 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import type { DashboardFilters } from "./types";
 import { dubaiDateBoundaryToUtc } from "./grubtech/dubaiTime";
+import { TEST_BRAND_NAME, TEST_CHANNEL_NAME } from "./grubtech/testFixture";
 
 export function parseFilters(searchParams: URLSearchParams): DashboardFilters {
   const multi = (key: string) => {
@@ -20,7 +21,16 @@ export function parseFilters(searchParams: URLSearchParams): DashboardFilters {
 }
 
 export function buildOrderWhere(filters: DashboardFilters): Prisma.OrderWhereInput {
-  const where: Prisma.OrderWhereInput = {};
+  // Never count GrubCenter's sandbox fixture as a real order — ingest now
+  // blocks it (lib/grubtech/normalize.ts), but rows ingested before that rule
+  // are still in the DB and would otherwise inflate every tab, drill-through
+  // and export that shares this filter.
+  const where: Prisma.OrderWhereInput = {
+    NOT: [
+      { brand: { name: { equals: TEST_BRAND_NAME, mode: "insensitive" } } },
+      { channel: { name: { equals: TEST_CHANNEL_NAME, mode: "insensitive" } } },
+    ],
+  };
 
   if (filters.dateFrom || filters.dateTo) {
     where.receivedAt = {

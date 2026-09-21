@@ -105,7 +105,7 @@ export function ChartPanel({ spec, onSlice }: Props) {
     spec.dimension && onSlice
       ? (index: number) => {
           const label = spec.labels[index];
-          if (label) onSlice(dimensionFilter(spec.dimension!, label));
+          if (label) onSlice({ ...spec.drillScope, ...dimensionFilter(spec.dimension!, label) });
         }
       : undefined;
 

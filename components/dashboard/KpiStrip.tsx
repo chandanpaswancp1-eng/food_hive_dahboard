@@ -26,72 +26,92 @@ interface Props {
 export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) {
   const Icon = TAB_ICONS[activeTab];
 
+  const renderCell = (k: KpiValue, i: number) => {
+    const tone = k.accent
+      ? { border: "var(--danger-500)", bg: "var(--danger-100)", fg: "var(--danger-700)" }
+      : TONE_CYCLE[i % TONE_CYCLE.length];
+    const isDrillable = Boolean(onDrill && (k.drillTab || k.drillFilter));
+
+    return (
+      <div
+        className={`kpi-cell${isDrillable ? " kpi-clickable" : ""}`}
+        key={k.key}
+        role={isDrillable ? "button" : undefined}
+        tabIndex={isDrillable ? 0 : undefined}
+        title={isDrillable ? `${k.fullValue ?? k.value} — click for order details` : (k.fullValue ?? k.value)}
+        onClick={isDrillable ? () => onDrill!(k.drillFilter ?? {}, k.drillTab) : undefined}
+        onKeyDown={
+          isDrillable
+            ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  onDrill!(k.drillFilter ?? {}, k.drillTab);
+                }
+              }
+            : undefined
+        }
+        style={
+          {
+            "--kpi-border": tone.border,
+            "--kpi-badge-bg": tone.bg,
+            "--kpi-badge-fg": tone.fg,
+          } as CSSProperties
+        }
+      >
+        {k.editCommission && onEditCommission && (
+          <button
+            type="button"
+            className="kpi-edit-btn"
+            title="Edit commission %"
+            onClick={(e) => {
+              e.stopPropagation();
+              onEditCommission(
+                k.editCommission!.channel,
+                k.editCommission!.currentCommissionRate,
+                k.editCommission!.currentDeliveryChargeRate,
+              );
+            }}
+          >
+            <Pencil size={12} />
+          </button>
+        )}
+        <div className="kpi-icon-badge">
+          <Icon size={18} />
+        </div>
+        <div className="kpi-body">
+          <div className="kpi-label">{k.label}</div>
+          <div className={`kpi-value${k.accent ? " accent" : ""}`}>{k.value}</div>
+          {/* Exact figure behind a compacted value (e.g. "AED 5.2K")
+              shown outright — a hover-only tooltip is invisible on
+              touch devices, where there's no hover at all. */}
+          {k.fullValue && k.fullValue !== k.value && <div className="kpi-full-value">{k.fullValue}</div>}
+          {k.subtitle && <div className="kpi-subtitle">{k.subtitle}</div>}
+        </div>
+      </div>
+    );
+  };
+
+  // Consecutive cards with the same `group` are wrapped together so the grid
+  // treats them as one unit and never splits them across two rows. `i` stays
+  // the card's position in the whole strip, so the colour rotation is unchanged.
+  const chunks: { group?: string; cells: { k: KpiValue; i: number }[] }[] = [];
+  kpis.forEach((k, i) => {
+    const last = chunks[chunks.length - 1];
+    if (k.group && last?.group === k.group) last.cells.push({ k, i });
+    else chunks.push({ group: k.group, cells: [{ k, i }] });
+  });
+
   return (
     <div className="kpi-strip">
-      {kpis.map((k, i) => {
-        const tone = k.accent
-          ? { border: "var(--danger-500)", bg: "var(--danger-100)", fg: "var(--danger-700)" }
-          : TONE_CYCLE[i % TONE_CYCLE.length];
-        const isDrillable = Boolean(onDrill && (k.drillTab || k.drillFilter));
-
-        return (
-          <div
-            className={`kpi-cell${isDrillable ? " kpi-clickable" : ""}`}
-            key={k.key}
-            role={isDrillable ? "button" : undefined}
-            tabIndex={isDrillable ? 0 : undefined}
-            title={isDrillable ? `${k.fullValue ?? k.value} — click for order details` : (k.fullValue ?? k.value)}
-            onClick={isDrillable ? () => onDrill!(k.drillFilter ?? {}, k.drillTab) : undefined}
-            onKeyDown={
-              isDrillable
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onDrill!(k.drillFilter ?? {}, k.drillTab);
-                    }
-                  }
-                : undefined
-            }
-            style={
-              {
-                "--kpi-border": tone.border,
-                "--kpi-badge-bg": tone.bg,
-                "--kpi-badge-fg": tone.fg,
-              } as CSSProperties
-            }
-          >
-            {k.editCommission && onEditCommission && (
-              <button
-                type="button"
-                className="kpi-edit-btn"
-                title="Edit commission %"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onEditCommission(
-                    k.editCommission!.channel,
-                    k.editCommission!.currentCommissionRate,
-                    k.editCommission!.currentDeliveryChargeRate,
-                  );
-                }}
-              >
-                <Pencil size={12} />
-              </button>
-            )}
-            <div className="kpi-icon-badge">
-              <Icon size={18} />
-            </div>
-            <div className="kpi-body">
-              <div className="kpi-label">{k.label}</div>
-              <div className={`kpi-value${k.accent ? " accent" : ""}`}>{k.value}</div>
-              {/* Exact figure behind a compacted value (e.g. "AED 5.2K")
-                  shown outright — a hover-only tooltip is invisible on
-                  touch devices, where there's no hover at all. */}
-              {k.fullValue && k.fullValue !== k.value && <div className="kpi-full-value">{k.fullValue}</div>}
-              {k.subtitle && <div className="kpi-subtitle">{k.subtitle}</div>}
-            </div>
+      {chunks.map((c) =>
+        c.group ? (
+          <div className="kpi-group" key={c.group}>
+            {c.cells.map(({ k, i }) => renderCell(k, i))}
           </div>
-        );
-      })}
+        ) : (
+          renderCell(c.cells[0].k, c.cells[0].i)
+        ),
+      )}
     </div>
   );
 }

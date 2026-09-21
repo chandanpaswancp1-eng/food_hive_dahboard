@@ -38,7 +38,15 @@ export function filterFromTableRow(row: Record<string, string | number>): Partia
       override[filterKey as string] = [value];
     }
   }
-  return override;
+  // Optional hidden date bounds (not a displayed column) for tables whose
+  // range isn't in the page filters — see the Weekly tab, which defaults to
+  // "last 4 weeks" when no range is picked.
+  const scoped: Partial<DashboardFilters> = override;
+  if (typeof row.dateFrom === "string" && typeof row.dateTo === "string") {
+    scoped.dateFrom = row.dateFrom;
+    scoped.dateTo = row.dateTo;
+  }
+  return scoped;
 }
 
 /**

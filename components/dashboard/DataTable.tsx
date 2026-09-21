@@ -37,6 +37,17 @@ export function DataTable({ spec, onRowClick }: Props) {
               </tr>
             ))}
           </tbody>
+          {spec.footerRow && spec.rows.length > 0 && (
+            <tfoot>
+              <tr>
+                {spec.columns.map((c) => (
+                  <td key={c.key} className={c.align === "right" ? "num" : undefined}>
+                    {spec.footerRow![c.key]}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
       {!spec.rows.length && (

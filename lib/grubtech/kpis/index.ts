@@ -9,6 +9,7 @@ import { buildRatingsTab } from "./ratings";
 import { buildDelayedTab } from "./delayed";
 import { buildStockoutsTab } from "./stockouts";
 import { buildIncomeTab } from "./income";
+import { buildWeeklyTab } from "./weekly";
 
 const TAB_CACHE_TTL_MS = 20_000;
 const tabCache = new Map<string, { data: TabPayload; expiresAt: number }>();
@@ -20,6 +21,12 @@ async function computeTabPayload(tab: TabId, filters: DashboardFilters): Promise
       prisma.order.count({ where: buildOrderWhere(filters) }),
     ]);
     return buildStockoutsTab(events, orderCount);
+  }
+
+  // Builds its own `where`: with no date range set it defaults to the last
+  // few weeks, so the shared unscoped `where` below isn't what it wants.
+  if (tab === "weekly") {
+    return buildWeeklyTab(filters);
   }
 
   const where = buildOrderWhere(filters);

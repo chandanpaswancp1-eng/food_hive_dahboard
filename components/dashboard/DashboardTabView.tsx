@@ -5,13 +5,18 @@ import { KpiStrip } from "./KpiStrip";
 import { ChartPanel } from "./ChartPanel";
 import { DataTable } from "./DataTable";
 import { TabImportButton } from "./TabImportButton";
-import type { DashboardFilters, ReportTypeHint, TabId, TabPayload, TableSpec } from "@/lib/types";
+import { MonthPicker } from "./MonthPicker";
+import type { DashboardFilters, FilterOptions, ReportTypeHint, TabId, TabPayload, TableSpec } from "@/lib/types";
 import { filterFromTableRow, isDrillableTable } from "@/lib/drillthrough";
 
 interface Props {
   payload: TabPayload | null;
   loading: boolean;
   activeTab: TabId;
+  filters: DashboardFilters;
+  options: FilterOptions | null;
+  todayGst: string | null;
+  onFiltersChange: (next: DashboardFilters) => void;
   importing: boolean;
   onImport: (file: File, hint?: ReportTypeHint) => void;
   onDrill: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
@@ -45,6 +50,10 @@ export function DashboardTabView({
   payload,
   loading,
   activeTab,
+  filters,
+  options,
+  todayGst,
+  onFiltersChange,
   importing,
   onImport,
   onDrill,
@@ -54,6 +63,9 @@ export function DashboardTabView({
   return (
     <>
       <div className="tab-toolbar">
+        {activeTab === "weekly" && (
+          <MonthPicker filters={filters} months={options?.months ?? []} todayGst={todayGst} onChange={onFiltersChange} />
+        )}
         <TabImportButton tab={activeTab} importing={importing} onImport={onImport} />
       </div>
       {loading || !payload ? (

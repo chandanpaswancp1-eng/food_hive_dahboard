@@ -1,6 +1,7 @@
 export const TAB_IDS = [
   "income",
   "order-details",
+  "weekly",
   "cancellations",
   "prep-time",
   "ratings",
@@ -13,6 +14,7 @@ export type TabId = (typeof TAB_IDS)[number];
 export const TAB_LABELS: Record<TabId, string> = {
   income: "Income",
   "order-details": "Order Details",
+  weekly: "Weekly Comparison",
   cancellations: "Cancellations",
   "prep-time": "Prep Time",
   ratings: "Ratings",
@@ -34,6 +36,8 @@ export const TAB_IMPORT_CONFIG: Record<TabId, { label: string; hint?: ReportType
   // in the DB — it has no distinct source file of its own to import.
   income: { label: "Import Data" },
   "order-details": { label: "Import Order Details", hint: "order-details" },
+  // Like Income, a pure rollup of Order Details data already in the DB.
+  weekly: { label: "Import Data" },
   cancellations: { label: "Import Cancelled Orders", hint: "cancelled-orders" },
   "prep-time": { label: "Import Data" },
   ratings: { label: "Import Data" },
@@ -59,6 +63,8 @@ export interface KpiValue {
   fullValue?: string;
   subtitle?: string;
   accent?: boolean;
+  /** Consecutive cards sharing a group are laid out as one unit that never splits across rows (e.g. a week's Gross + Net pair). */
+  group?: string;
   /**
    * Makes the card clickable, opening the drill-through modal. `drillTab`
    * overrides which tab's status convention /api/orders applies (e.g. a
@@ -93,6 +99,8 @@ export interface ChartSpec {
   datasets: ChartDataset[];
   /** When set, each label is a value for this filter dimension — clicking a slice/bar drills through scoped to it. */
   dimension?: DrillDimension;
+  /** Extra filter overrides merged into every drill-through from this chart — for a view whose own date range isn't in the page filters (e.g. the Weekly tab's default of "last 4 weeks"). */
+  drillScope?: Partial<DashboardFilters>;
 }
 
 export interface TableColumn {
@@ -115,6 +123,8 @@ export interface TableSpec {
    * showing that item's own 86'd-episode history, not orders/sales.
    */
   itemDrillKey?: string;
+  /** A pinned totals row rendered below the body — never clickable, so it can't be mistaken for a real drillable dimension value. */
+  footerRow?: Record<string, string | number>;
 }
 
 export interface StockoutEpisode {
@@ -144,6 +154,8 @@ export interface FilterOptions {
   locations: string[];
   channels: string[];
   paymentMethods: string[];
+  /** Every "YYYY-MM" month that has at least one order, newest first — feeds the Weekly Comparison month picker. */
+  months: string[];
 }
 
 export interface SyncStatusPayload {

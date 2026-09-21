@@ -33,6 +33,7 @@ function describeScope(scope: Partial<DashboardFilters>): string | null {
     ...(scope.channels ?? []),
   ];
   if (scope.dateFrom && scope.dateFrom === scope.dateTo) parts.push(scope.dateFrom);
+  else if (scope.dateFrom && scope.dateTo) parts.push(`${scope.dateFrom} → ${scope.dateTo}`);
   return parts.length ? parts.join(" · ") : null;
 }
 

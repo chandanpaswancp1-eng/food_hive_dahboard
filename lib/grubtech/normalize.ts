@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dubaiDayName, dubaiDayOfWeek, dubaiHour, setDubaiHour } from "./dubaiTime";
+import { isTestFixtureName } from "./testFixture";
 
 /**
  * Field-alias map, matched exactly (case/space-sensitive) against whatever
@@ -254,7 +255,7 @@ export function normalizeRawOrder(raw: unknown): NormalizeResult {
   // fixture under this exact brand+channel pair, each time with a fresh
   // order id — deleting the resulting rows doesn't stop it from coming
   // back on the next sync, so it's excluded here instead.
-  if (data.brand.trim().toUpperCase() === "TEST BRAND" || data.channel.trim().toUpperCase() === "GRUBTECH TEST") {
+  if (isTestFixtureName("brand", data.brand) || isTestFixtureName("channel", data.channel)) {
     return { ok: false, issues: [`brand/channel: GrubCenter test fixture excluded (${data.brand} / ${data.channel})`], raw };
   }
 

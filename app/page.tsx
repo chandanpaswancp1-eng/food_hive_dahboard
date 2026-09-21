@@ -37,6 +37,19 @@ function filtersToParams(filters: DashboardFilters): string {
   return params.toString();
 }
 
+/**
+ * The status pollers below hit routes that answer 503 {"error":
+ * "database_unavailable"} during the DB's intermittent-connection windows.
+ * That body is valid JSON, so storing it as the payload put an object with no
+ * `alerts`/`portals` array into state and crashed the whole page on the next
+ * render ("This page couldn't load"). Only a real (ok) payload is stored, so
+ * a blip just leaves the last good data in place until the next poll.
+ */
+async function fetchOkJson<T>(url: string): Promise<T | null> {
+  const res = await fetch(url);
+  return res.ok ? ((await res.json()) as T) : null;
+}
+
 export default function DashboardPage() {
   const [activeTab, setActiveTab] = useState<TabId>("income");
   const [filters, setFilters] = useState<DashboardFilters>({});
@@ -116,9 +129,8 @@ export default function DashboardPage() {
   }, [options, retryTick]);
 
   const loadSyncStatus = useCallback(() => {
-    fetch("/api/sync/status")
-      .then((r) => r.json())
-      .then(setSync)
+    fetchOkJson<SyncStatusPayload>("/api/sync/status")
+      .then((data) => data && setSync(data))
       .catch(() => {});
   }, []);
 
@@ -127,9 +139,8 @@ export default function DashboardPage() {
   }, [loadSyncStatus, retryTick]);
 
   const loadPortalStatus = useCallback(() => {
-    fetch("/api/channels/status")
-      .then((r) => r.json())
-      .then(setPortalStatus)
+    fetchOkJson<PortalStatusPayload>("/api/channels/status")
+      .then((data) => data && setPortalStatus(data))
       .catch(() => {});
   }, []);
 
@@ -138,9 +149,8 @@ export default function DashboardPage() {
   }, [loadPortalStatus, retryTick]);
 
   const loadAlerts = useCallback(() => {
-    fetch("/api/alerts")
-      .then((r) => r.json())
-      .then(setAlerts)
+    fetchOkJson<AlertsPayload>("/api/alerts")
+      .then((data) => data && setAlerts(data))
       .catch(() => {});
   }, []);
 
@@ -326,6 +336,10 @@ export default function DashboardPage() {
               payload={payload}
               loading={loading}
               activeTab={activeTab}
+              filters={filters}
+              options={options}
+              todayGst={todayGst}
+              onFiltersChange={updateFilters}
               importing={importing}
               onImport={handleImport}
               onDrill={handleDrill}

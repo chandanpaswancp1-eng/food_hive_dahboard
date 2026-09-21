@@ -12,6 +12,7 @@ import { dbErrorResponse, isDbConnectionError } from "@/lib/apiError";
 const TAB_STATUS_FILTER: Partial<Record<TabId, OrderStatus>> = {
   income: "COMPLETED",
   "order-details": "COMPLETED",
+  weekly: "COMPLETED",
   "prep-time": "COMPLETED",
   delayed: "COMPLETED",
   cancellations: "CANCELLED",
