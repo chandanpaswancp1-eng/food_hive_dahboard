@@ -152,11 +152,6 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     minReceivedAt && maxReceivedAt ? daysBetweenInclusive(dubaiDateKey(minReceivedAt), dubaiDateKey(maxReceivedAt)) : 0;
   const calendarDays = explicitRangeDays ?? actualSpanDays;
   const avgDailyIncome = takeHomeIncome / Math.max(calendarDays, 1);
-  // The month actually being projected: the one containing the scoped
-  // range's (clamped) end date, or today when there's no explicit range —
-  // not a flat 30, which quietly under-projects a 31-day month and
-  // over-projects February.
-  const projectedMonthlyIncome = avgDailyIncome * daysInDubaiMonth(effectiveDateTo ?? todayKey);
 
   // ---- channel breakdown ----
   const channelRows = sortDesc(
@@ -284,6 +279,17 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       };
     });
 
+  // Projects the CURRENT month's own pace to a full month — not the
+  // avgDailyIncome above, which (left unscoped, the default) blends in
+  // every earlier month too. That previously understated a fast-trending
+  // month: e.g. a slow August dragged down September's projection even
+  // though September's own daily rate was running far higher.
+  const currentMonthRow = monthRows[monthRows.length - 1];
+  const projectedMonthlyIncome =
+    currentMonthRow && currentMonthRow.days > 0
+      ? (currentMonthRow.takeHome / currentMonthRow.days) * daysInDubaiMonth(`${currentMonthRow.month}-01`)
+      : 0;
+
   const momGrowthPct = (() => {
     if (monthRows.length < 2) return null;
     const last = monthRows[monthRows.length - 1];
@@ -333,7 +339,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
 
       // Group 3 — pace.
       { key: "avgDailyIncome", label: "Avg Daily Income", value: `${fmtCurrencyCompact(avgDailyIncome)}/day`, fullValue: `${fmtCurrencyExact(avgDailyIncome)}/day` },
-      ...(calendarDays > 1
+      ...(currentMonthRow && currentMonthRow.days > 0
         ? [
             {
               key: "projectedMonthlyIncome",

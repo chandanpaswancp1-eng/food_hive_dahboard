@@ -124,8 +124,11 @@ export function ChartPanel({ spec, onSlice }: Props) {
       // Gradient area fill only for single/dual-series line charts (the
       // reference's look) — several overlapping filled areas on a
       // multi-series trend chart (e.g. one line per aggregator) would just
-      // read as visual mud, so those keep a plain stroked line.
-      const isFilled = isLine && spec.datasets.length <= 2;
+      // read as visual mud, so those keep a plain stroked line. A dashed
+      // dataset (a target/benchmark overlay) never fills either, even inside
+      // a chart where its solid sibling does — only the actual-value line
+      // should read as a filled area.
+      const isFilled = isLine && !ds.dashed && spec.datasets.length <= 2;
       const color = palette[i % palette.length];
       const lastIndex = ds.data.length - 1;
       return {
@@ -133,11 +136,13 @@ export function ChartPanel({ spec, onSlice }: Props) {
         data: ds.data,
         backgroundColor: isFilled ? areaGradient(color) : color,
         borderColor: isLine ? color : "transparent",
+        borderDash: ds.dashed ? [6, 4] : undefined,
         borderRadius: isLine ? 0 : 6,
         borderWidth: isLine ? 2 : 0,
         // The latest point on a single/dual-series trend gets a bigger,
         // ringed marker so the chart reads "and here's where we are now" at
-        // a glance — every other point stays a small plain dot.
+        // a glance — every other point stays a small plain dot. A dashed
+        // target line never gets this treatment (isFilled is false for it).
         pointRadius: isFilled
           ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
             (context: any) => (context.dataIndex === lastIndex ? 5 : 2)

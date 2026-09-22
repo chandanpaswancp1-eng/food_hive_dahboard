@@ -404,6 +404,14 @@ button, input, select {
 
 /* ---- kpi strip ---- */
 
+.kpi-strip-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
 .kpi-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
@@ -415,10 +423,37 @@ button, input, select {
    side: it spans two of the strip's columns, so the grid never splits it
    across rows. On narrow screens it stacks the pair inside a single column. */
 .kpi-group {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: var(--space-4);
   grid-column: span 2;
+}
+
+/* ---- kpi customize / drag-to-reorder ---- */
+
+.kpi-drag-handle {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.kpi-cell.kpi-editing,
+.kpi-group.kpi-editing {
+  border-style: dashed;
+  cursor: grab;
+}
+
+.kpi-cell.kpi-editing:active,
+.kpi-group.kpi-editing:active {
+  cursor: grabbing;
+}
+
+.kpi-cell.kpi-dragging,
+.kpi-group.kpi-dragging {
+  opacity: 0.4;
 }
 
 @media (max-width: 900px) {

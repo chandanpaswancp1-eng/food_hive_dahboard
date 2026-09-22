@@ -106,6 +106,8 @@ export interface ChartDataset {
   data: number[];
   kind?: "bar" | "line";
   yAxisId?: "y" | "y1";
+  /** Renders as a dashed stroke with no area fill — a target/benchmark overlay distinct from the solid actual-value line it's compared against. */
+  dashed?: boolean;
 }
 
 export type DrillDimension = "brand" | "location" | "channel" | "cuisine" | "date" | "payment";
