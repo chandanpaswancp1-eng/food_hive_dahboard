@@ -12,9 +12,11 @@ export async function buildMonthlyTab(filters: DashboardFilters): Promise<TabPay
   // Order Details tab scoped to the same dates.
   const completed: Prisma.OrderWhereInput = { status: "COMPLETED" };
 
-  // With no start picked the view begins at the first day that has orders
-  // (under the other filters), so months before trading began aren't empty
-  // columns. Skipped when a start is picked — it wouldn't be used.
+  // With no start picked the view begins on the 1st of the month that has
+  // the first order (under the other filters), so months before trading
+  // began aren't empty columns while the first month still runs in full
+  // (e.g. Aug 1-31, not just the days actually trading). Skipped when a
+  // start is picked — it wouldn't be used.
   const earliest = filters.dateFrom
     ? null
     : await prisma.order.aggregate({

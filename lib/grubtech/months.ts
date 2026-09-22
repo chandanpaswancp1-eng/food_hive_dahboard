@@ -26,11 +26,11 @@ function daysInMonth(year: number, month: number): number {
 
 /**
  * Resolves the range the monthly view covers. With no start picked it begins
- * on the first day that has any orders (`earliestKey`), so months before the
- * business started trading don't show up as empty columns — and that first
- * month is honestly partial (e.g. 17-31 Aug), not padded out to a full month.
- * A future end is clamped to today; the start moves forward to keep the view
- * within MAX_MONTHS and `clipped` says so.
+ * on the 1st of the month that has the first order (`earliestKey`), so every
+ * month is a full calendar month — including the first, even though the
+ * business wasn't trading yet on its early days (e.g. Aug still runs 1-31,
+ * not 17-31). A future end is clamped to today; the start moves forward to
+ * keep the view within MAX_MONTHS and `clipped` says so.
  */
 export function resolveMonthlyRange(
   dateFrom: string | undefined,
@@ -39,7 +39,7 @@ export function resolveMonthlyRange(
   earliestKey: string | null | undefined,
 ): { from: string; to: string; clipped: boolean } {
   const to = dateTo && dateTo < todayKey ? dateTo : todayKey;
-  let from = dateFrom ?? earliestKey ?? `${to.slice(0, 7)}-01`;
+  let from = dateFrom ?? (earliestKey ? `${earliestKey.slice(0, 7)}-01` : `${to.slice(0, 7)}-01`);
   if (from > to) from = to;
 
   const clipped = monthIndex(to) - monthIndex(from) + 1 > MAX_MONTHS;
