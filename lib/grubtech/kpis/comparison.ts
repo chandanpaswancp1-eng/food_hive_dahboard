@@ -42,6 +42,16 @@ function perDayChangePct(cur: number, curP: PeriodBucket, prev: number, prevP: P
   return ((cur / curP.days) / prevPerDay - 1) * 100;
 }
 
+/**
+ * Plain percentage change, for a series that's already per-day (e.g. the
+ * Net Sales per Day table below) — perDayChangePct must never be applied to
+ * one of those, since it would divide by each period's day-count a second
+ * time and produce a meaningless number.
+ */
+function plainChangePct(cur: number, prev: number): number | null {
+  return prev === 0 ? null : (cur / prev - 1) * 100;
+}
+
 function fmtChange(pct: number | null): string {
   if (pct === null) return "—";
   return `${pct >= 0 ? "+" : "−"}${Math.abs(pct).toFixed(1)}%`;
@@ -231,7 +241,16 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
   ];
 
   // ---- Tables: aggregator x period matrices, with a pinned Total row -----
-  const matrixTable = (title: string, series: (c: { totals: Totals } | null) => number[], fmt: (n: number) => string): TableSpec => {
+  // `changeFn` defaults to the raw-totals path (perDayChangePct, via
+  // changeVsPrev) — the per-day table below passes plainChangePct instead,
+  // since its `values` are already per-day and must not be divided by the
+  // day-count a second time.
+  const matrixTable = (
+    title: string,
+    series: (c: { totals: Totals } | null) => number[],
+    fmt: (n: number) => string,
+    changeFn: (values: number[], p: number) => number | null = changeVsPrev,
+  ): TableSpec => {
     const columns: TableSpec["columns"] = [
       { key: "channel", label: "Aggregator" },
       ...buckets.map((p) => ({ key: `${keyPrefix}${p.index + 1}`, label: `${p.label} · ${p.rangeLabel}`, align: "right" as const })),
@@ -240,7 +259,7 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
     const rowFor = (label: string, values: number[]) => ({
       channel: label,
       ...Object.fromEntries(buckets.map((p) => [`${keyPrefix}${p.index + 1}`, fmt(values[p.index])])),
-      ...(buckets.length > 1 ? { change: fmtChange(changeVsPrev(values, latest.index)) } : {}),
+      ...(buckets.length > 1 ? { change: fmtChange(changeFn(values, latest.index)) } : {}),
     });
 
     return {
@@ -255,6 +274,7 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
 
   const metricSeries = (metric: Metric) => (c: { totals: Totals } | null) => (c ? c.totals[metric] : overall[metric]);
   const perDay = (c: { totals: Totals } | null) => (c ? c.totals.net : overall.net).map((v, i) => v / buckets[i].days);
+  const perDayChange = (values: number[], p: number): number | null => (p === 0 ? null : plainChangePct(values[p], values[p - 1]));
 
   return {
     kpis,
@@ -263,7 +283,7 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
     extraTables: [
       matrixTable(`Gross Sales by Aggregator × ${noun}`, metricSeries("gross"), fmtCurrency),
       matrixTable(`Orders by Aggregator × ${noun}`, metricSeries("orders"), fmtNumber),
-      ...(o.perDayTable ? [matrixTable(`Net Sales per Day by Aggregator × ${noun}`, perDay, fmtCurrency)] : []),
+      ...(o.perDayTable ? [matrixTable(`Net Sales per Day by Aggregator × ${noun}`, perDay, fmtCurrency, perDayChange)] : []),
     ],
     scope: { orderCount: totalOrders },
   };
