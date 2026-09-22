@@ -1,20 +1,6 @@
-import type { CSSProperties } from "react";
 import { Pencil } from "lucide-react";
 import type { DashboardFilters, KpiValue, TabId } from "@/lib/types";
-import { TAB_ICONS } from "@/lib/tabIcons";
-
-// Rotates non-danger KPI cards through the brand's accent hues so the strip
-// reads as colourful rather than one repeated tint. Five distinct hues (not
-// four) so a full 8-9 card tab (e.g. Order Details) doesn't repeat the same
-// colour on an adjacent card two rows down — e.g. Gross Sales and Total
-// Discount previously both landed on tone 0 (primary/gold).
-const TONE_CYCLE: { border: string; bg: string; fg: string }[] = [
-  { border: "var(--primary-500)", bg: "var(--primary-100)", fg: "var(--primary-700)" },
-  { border: "var(--secondary-500)", bg: "var(--secondary-100)", fg: "var(--secondary-700)" },
-  { border: "var(--tertiary-500)", bg: "var(--tertiary-100)", fg: "var(--tertiary-700)" },
-  { border: "var(--success-500)", bg: "var(--success-100)", fg: "var(--success-700)" },
-  { border: "var(--info-500)", bg: "var(--info-100)", fg: "var(--info-700)" },
-];
+import { Sparkline } from "./Sparkline";
 
 interface Props {
   kpis: KpiValue[];
@@ -23,13 +9,8 @@ interface Props {
   onEditCommission?: (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => void;
 }
 
-export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) {
-  const Icon = TAB_ICONS[activeTab];
-
-  const renderCell = (k: KpiValue, i: number) => {
-    const tone = k.accent
-      ? { border: "var(--danger-500)", bg: "var(--danger-100)", fg: "var(--danger-700)" }
-      : TONE_CYCLE[i % TONE_CYCLE.length];
+export function KpiStrip({ kpis, onDrill, onEditCommission }: Props) {
+  const renderCell = (k: KpiValue) => {
     const isDrillable = Boolean(onDrill && (k.drillTab || k.drillFilter));
 
     return (
@@ -50,13 +31,6 @@ export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) 
               }
             : undefined
         }
-        style={
-          {
-            "--kpi-border": tone.border,
-            "--kpi-badge-bg": tone.bg,
-            "--kpi-badge-fg": tone.fg,
-          } as CSSProperties
-        }
       >
         {k.editCommission && onEditCommission && (
           <button
@@ -75,30 +49,34 @@ export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) 
             <Pencil size={12} />
           </button>
         )}
-        <div className="kpi-icon-badge">
-          <Icon size={18} />
-        </div>
         <div className="kpi-body">
           <div className="kpi-label">{k.label}</div>
-          <div className={`kpi-value${k.accent ? " accent" : ""}`}>{k.value}</div>
+          <div className="kpi-value-row">
+            <div className={`kpi-value${k.accent ? " accent" : ""}`}>{k.value}</div>
+            {k.trend && (
+              <span className={`kpi-trend-pill${k.trend.pct < 0 ? " down" : ""}`}>
+                {k.trend.pct >= 0 ? "▲" : "▼"} {Math.abs(k.trend.pct).toFixed(1)}%
+              </span>
+            )}
+          </div>
           {/* Exact figure behind a compacted value (e.g. "AED 5.2K")
               shown outright — a hover-only tooltip is invisible on
               touch devices, where there's no hover at all. */}
           {k.fullValue && k.fullValue !== k.value && <div className="kpi-full-value">{k.fullValue}</div>}
           {k.subtitle && <div className="kpi-subtitle">{k.subtitle}</div>}
         </div>
+        {k.sparkline && k.sparkline.length > 1 && <Sparkline values={k.sparkline} />}
       </div>
     );
   };
 
   // Consecutive cards with the same `group` are wrapped together so the grid
-  // treats them as one unit and never splits them across two rows. `i` stays
-  // the card's position in the whole strip, so the colour rotation is unchanged.
-  const chunks: { group?: string; cells: { k: KpiValue; i: number }[] }[] = [];
-  kpis.forEach((k, i) => {
+  // treats them as one unit and never splits them across two rows.
+  const chunks: { group?: string; cells: KpiValue[] }[] = [];
+  kpis.forEach((k) => {
     const last = chunks[chunks.length - 1];
-    if (k.group && last?.group === k.group) last.cells.push({ k, i });
-    else chunks.push({ group: k.group, cells: [{ k, i }] });
+    if (k.group && last?.group === k.group) last.cells.push(k);
+    else chunks.push({ group: k.group, cells: [k] });
   });
 
   return (
@@ -106,10 +84,10 @@ export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) 
       {chunks.map((c) =>
         c.group ? (
           <div className="kpi-group" key={c.group}>
-            {c.cells.map(({ k, i }) => renderCell(k, i))}
+            {c.cells.map(renderCell)}
           </div>
         ) : (
-          renderCell(c.cells[0].k, c.cells[0].i)
+          renderCell(c.cells[0])
         ),
       )}
     </div>

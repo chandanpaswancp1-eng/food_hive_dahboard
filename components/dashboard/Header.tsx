@@ -2,7 +2,7 @@
 
 import { CheckCircle2, Circle, AlertCircle, Loader2, Download, RefreshCw } from "lucide-react";
 import type { AlertsPayload, PortalStatusPayload, SyncStatusPayload, TabId } from "@/lib/types";
-import { TAB_LABELS } from "@/lib/types";
+import { TAB_LABELS, TAB_SUBTITLES } from "@/lib/types";
 import { fmtTimeGst } from "@/lib/format";
 import { PortalStatusStrip } from "./PortalStatusStrip";
 import { AlertCenter } from "./AlertCenter";
@@ -56,7 +56,10 @@ export function Header({ sync, portalStatus, alerts, onExport, onManualSync, man
 
   return (
     <header className="app-header">
-      <h2 className="header-title">{TAB_LABELS[activeTab]}</h2>
+      <div className="header-title-block">
+        <h2 className="header-title">{TAB_LABELS[activeTab]}</h2>
+        <p className="header-subtitle">{TAB_SUBTITLES[activeTab]}</p>
+      </div>
       <div className="header-actions">
         <AlertCenter status={alerts} />
         <PortalStatusStrip status={portalStatus} />

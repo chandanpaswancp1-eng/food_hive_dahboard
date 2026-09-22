@@ -230,6 +230,41 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     monthAgg.set(month, entry);
   }
 
+  // ---- daily take-home series, for the headline KPI card's sparkline ----
+  // Same re-attribution pattern as monthCommission/monthAgg above, just keyed
+  // on the raw receivedDateKey instead of month-sliced — no new queries.
+  const dayCommission = new Map<string, number>();
+  for (const g of byDateChannelGroups) {
+    if (!g.receivedDateKey) continue;
+    const rate = rateByChannel.get(g.channelId) ?? 0;
+    const prev = dayCommission.get(g.receivedDateKey) ?? 0;
+    dayCommission.set(g.receivedDateKey, prev + num(g._sum.netSales) * (rate / 100));
+  }
+  const dayNetSales = new Map<string, number>();
+  for (const g of byDateGroups) {
+    if (!g.receivedDateKey) continue;
+    dayNetSales.set(g.receivedDateKey, (dayNetSales.get(g.receivedDateKey) ?? 0) + num(g._sum.netSales));
+  }
+  const takeHomeSparkline = [...dayNetSales.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([date, netSales]) => round2(netSales - round2(dayCommission.get(date) ?? 0)))
+    .slice(-30);
+
+  // Days of `month` ("YYYY-MM") actually covered by this scope — the full
+  // calendar month, clipped to filters.dateFrom at the start and to
+  // effectiveDateTo (already today-clamped) at the end. Needed so MoM growth
+  // below compares take-home *per day* rather than raw totals: without it, a
+  // partial in-progress month (e.g. 22 days of September) reads as a huge
+  // "crash" or "spike" against a prior full month it hasn't had time to catch up to.
+  const daysElapsedInMonth = (month: string): number => {
+    const monthStart = `${month}-01`;
+    const monthEnd = `${month}-${String(daysInDubaiMonth(monthStart)).padStart(2, "0")}`;
+    const start = filters.dateFrom && filters.dateFrom > monthStart ? filters.dateFrom : monthStart;
+    const rangeEnd = effectiveDateTo ?? todayKey;
+    const end = rangeEnd < monthEnd ? rangeEnd : monthEnd;
+    return start > end ? 0 : daysBetweenInclusive(start, end);
+  };
+
   const monthRows = [...monthAgg.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))
     .map(([month, v]) => {
@@ -245,16 +280,18 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         takeHome,
         marginPct: safeDiv(takeHome, gross) * 100,
         orders: v.orders,
+        days: daysElapsedInMonth(month),
       };
     });
 
-  const momGrowthPct =
-    monthRows.length >= 2
-      ? safeDiv(
-          monthRows[monthRows.length - 1].takeHome - monthRows[monthRows.length - 2].takeHome,
-          monthRows[monthRows.length - 2].takeHome,
-        ) * 100
-      : null;
+  const momGrowthPct = (() => {
+    if (monthRows.length < 2) return null;
+    const last = monthRows[monthRows.length - 1];
+    const prev = monthRows[monthRows.length - 2];
+    if (last.days === 0 || prev.days === 0) return null;
+    const prevPerDay = prev.takeHome / prev.days;
+    return prevPerDay === 0 ? null : ((last.takeHome / last.days) / prevPerDay - 1) * 100;
+  })();
 
   // ---- payment method breakdown ----
   const paymentRows = sortDesc(
@@ -284,6 +321,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         value: fmtCurrencyCompact(takeHomeIncome),
         fullValue: fmtCurrencyExact(takeHomeIncome),
         subtitle: "Net sales minus platform commission & delivery charge",
+        sparkline: takeHomeSparkline,
       },
       { key: "grossRevenue", label: "Gross Revenue", value: fmtCurrencyCompact(grossRevenue), fullValue: fmtCurrencyExact(grossRevenue) },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
@@ -311,7 +349,9 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
               key: "momGrowth",
               label: "Income Growth (MoM)",
               value: `${momGrowthPct >= 0 ? "+" : ""}${fmtPercent(momGrowthPct)}`,
+              subtitle: "Per day, vs last month",
               accent: momGrowthPct < 0,
+              trend: { pct: momGrowthPct, label: "vs last month" },
             },
           ]
         : []),

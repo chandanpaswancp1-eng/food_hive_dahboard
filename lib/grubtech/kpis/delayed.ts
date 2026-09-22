@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtMinutes, fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtMinutes, fmtNumber, fmtNumberCompact, fmtPercent, round2, safeDiv } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
 import { DELAY_THRESHOLD_MINUTES } from "@/lib/grubtech/normalize";
 
@@ -107,6 +107,14 @@ export async function buildDelayedTab(where: Prisma.OrderWhereInput): Promise<Ta
       { key: "worstBrand", label: "Worst Brand", value: worstBrand },
     ],
     charts: [
+      {
+        id: "on-time-gauge",
+        title: "On-Time Compliance",
+        caption: `${fmtNumber(totalOrders - delayedOrders)} of ${fmtNumber(totalOrders)} orders under ${DELAY_THRESHOLD_MINUTES}min`,
+        type: "gauge",
+        labels: ["On-Time Compliance"],
+        datasets: [{ label: "On-Time Compliance", data: [round2(Math.max(0, Math.min(100, onTimeCompliance)))] }],
+      },
       {
         id: "completed-vs-delayed-by-brand",
         title: `Completed vs Delayed (>${DELAY_THRESHOLD_MINUTES}min) by Brand`,

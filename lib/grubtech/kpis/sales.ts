@@ -244,7 +244,13 @@ export async function buildSalesTab(baseWhere: Prisma.OrderWhereInput, filters: 
   return {
     kpis: [
       // Group 1 — core sales figures.
-      { key: "grossSales", label: "Gross Sales", value: fmtCurrencyCompact(grossSales), fullValue: fmtCurrencyExact(grossSales) },
+      {
+        key: "grossSales",
+        label: "Gross Sales",
+        value: fmtCurrencyCompact(grossSales),
+        fullValue: fmtCurrencyExact(grossSales),
+        sparkline: dateRows.map((d) => d.receiptTotal + d.discount).slice(-30),
+      },
       { key: "netSales", label: "Net Sales", value: fmtCurrencyCompact(netSales), fullValue: fmtCurrencyExact(netSales) },
       { key: "receiptTotal", label: "Receipt Total", value: fmtCurrencyCompact(receiptTotal), fullValue: fmtCurrencyExact(receiptTotal) },
       { key: "totalDiscount", label: "Total Discount", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount) },

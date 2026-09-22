@@ -100,6 +100,7 @@ export async function buildCancellationsTab(where: Prisma.OrderWhereInput): Prom
         fullValue: fmtNumber(cancelledCount),
         subtitle: fmtPercent(cancelRate),
         drillTab: "cancellations",
+        sparkline: trendRows.map((r) => r.count).slice(-30),
       },
       {
         key: "cancelledAov",

@@ -134,7 +134,8 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
   // ---- KPI cards: a Gross then a Net card per period ----------------------
   const card = (metric: "net" | "gross", p: PeriodBucket): KpiValue => {
     const value = overall[metric][p.index];
-    const change = fmtChangeArrow(changeVsPrev(overall[metric], p.index));
+    const changePct = changeVsPrev(overall[metric], p.index);
+    const change = fmtChangeArrow(changePct);
     const subtitle = [
       p.rangeLabel + (p.days < p.fullDays ? ` · ${p.days}d` : ""),
       change && `${change} vs ${buckets[p.index - 1].shortLabel}`,
@@ -152,6 +153,10 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
       // (clipped) dates, completed-only via this tab's status filter.
       drillTab: tab,
       drillFilter: { dateFrom: p.start, dateTo: p.end },
+      trend: changePct !== null ? { pct: changePct, label: `vs ${buckets[p.index - 1].shortLabel}` } : undefined,
+      // Sparkline on the latest period's Gross card only — a period-level (not
+      // daily) series of the recent weeks/months already computed above.
+      sparkline: metric === "gross" && p.index === latest.index ? overall.gross.slice(-KPI_PERIODS) : undefined,
     };
   };
 

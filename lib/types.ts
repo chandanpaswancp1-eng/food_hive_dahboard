@@ -24,6 +24,19 @@ export const TAB_LABELS: Record<TabId, string> = {
   stockouts: "86 Items",
 };
 
+/** One-line description shown under the tab title in the header. */
+export const TAB_SUBTITLES: Record<TabId, string> = {
+  income: "Take-home income, commissions, and margins across channels.",
+  "order-details": "Gross and net sales, discounts, and order-level detail.",
+  weekly: "Week-over-week gross and net sales comparison.",
+  monthly: "Month-over-month gross and net sales comparison.",
+  cancellations: "Cancelled orders, refunded amounts, and cancellation trends.",
+  "prep-time": "Kitchen prep and dispatch timing by brand and branch.",
+  ratings: "Customer ratings and sentiment across brands and locations.",
+  delayed: "Orders exceeding the delay threshold, by brand and branch.",
+  stockouts: "86'd items and stockout frequency across the menu.",
+};
+
 /** File types the backend can confidently recognize — the two real GrubCenter exports seen so far. */
 export type ReportTypeHint = "order-details" | "cancelled-orders";
 
@@ -80,6 +93,10 @@ export interface KpiValue {
   drillFilter?: Partial<DashboardFilters>;
   /** Marks this card as commission-rate-editable for `channel`, prefilled with both current rates — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
   editCommission?: { channel: string; currentCommissionRate: number; currentDeliveryChargeRate: number };
+  /** Structured period-over-period change, rendered as a small colored pill (▲/▼ + %). Positive/negative sign drives the arrow direction and color. */
+  trend?: { pct: number; label?: string };
+  /** Ascending-chronological values for a small embedded sparkline — set only on select headline metrics where the builder already has a per-day/per-period series on hand. */
+  sparkline?: number[];
 }
 
 export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo" | "gauge";

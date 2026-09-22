@@ -98,6 +98,18 @@
   --shadow-md: 0 4px 10px rgba(32, 30, 29, 0.08), 0 2px 4px rgba(32, 30, 29, 0.06);
   --shadow-lg: 0 12px 24px rgba(32, 30, 29, 0.14), 0 4px 8px rgba(32, 30, 29, 0.08);
 
+  /* Subtle "glass" surface treatment — used for the active sidebar nav item's
+     background/glow and as the base border for .panel (the chart/table
+     wrapper). Gradients/glow apply only to background/box-shadow, never to
+     text color, so contrast never depends on them. */
+  --glass-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface) 100%, transparent),
+    color-mix(in srgb, var(--color-surface-2) 55%, var(--color-surface) 45%)
+  );
+  --glass-border: color-mix(in srgb, var(--color-border) 70%, var(--color-primary) 14%);
+  --hero-glow: 0 20px 40px -22px color-mix(in srgb, var(--color-primary) 26%, transparent), 0 2px 10px rgba(32, 30, 29, 0.06);
+
   --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23726b68' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 }
 
@@ -142,6 +154,16 @@
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
   --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
+
+  /* Lower-alpha than light mode's — dark backgrounds make glow/gradient bloom
+     more, so the same intensity would read as glare rather than polish. */
+  --glass-surface: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--color-surface) 100%, transparent),
+    color-mix(in srgb, var(--color-surface-2) 70%, var(--color-surface) 30%)
+  );
+  --glass-border: color-mix(in srgb, var(--color-border) 60%, var(--color-primary) 16%);
+  --hero-glow: 0 22px 44px -20px color-mix(in srgb, var(--color-primary) 14%, transparent), 0 2px 14px rgba(0, 0, 0, 0.5);
 
   --select-chevron: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='%23bab6b6' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>");
 }
@@ -202,8 +224,8 @@ button, input, select {
 /* ---- layout primitives ---- */
 
 .panel {
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
   padding: var(--space-4);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
@@ -279,35 +301,79 @@ button, input, select {
 .sidebar-nav {
   display: flex;
   flex-direction: column;
-  gap: var(--space-1);
+  gap: var(--space-4);
   flex: 1;
+}
+
+.sidebar-nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.sidebar-nav-group-label {
+  padding: 0 var(--space-2);
+  margin-bottom: var(--space-1);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--color-text-muted);
 }
 
 .sidebar-nav-item {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  padding: var(--space-3);
-  border-radius: var(--radius-sm);
-  border: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  border: 1px solid transparent;
   background: none;
   color: var(--color-text-muted);
   font-family: var(--font-heading);
-  font-weight: 600;
+  font-weight: 700;
   font-size: 14px;
   cursor: pointer;
   text-align: left;
-  transition: background-color 0.15s ease, color 0.15s ease;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.1s ease;
+}
+
+/* The nav icon in its own rounded chip — SVGs accept normal box-model
+   properties (padding/background/border-radius) like any other element. */
+.sidebar-nav-item svg {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  padding: 8px;
+  box-sizing: border-box;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  color: var(--color-text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .sidebar-nav-item:hover {
   background: var(--color-surface);
   color: var(--color-text);
+  border-color: var(--color-border);
+}
+
+.sidebar-nav-item:hover svg {
+  color: var(--color-text);
 }
 
 .sidebar-nav-item.active {
-  background: var(--primary-100);
+  background: var(--glass-surface);
   color: var(--primary-700);
+  border-color: var(--glass-border);
+  box-shadow: var(--hero-glow);
+  transform: translateX(2px);
+}
+
+.sidebar-nav-item.active svg {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  box-shadow: 0 4px 10px -2px color-mix(in srgb, var(--color-primary) 50%, transparent);
 }
 
 .sidebar-footer {
@@ -365,16 +431,14 @@ button, input, select {
 .kpi-cell {
   position: relative;
   display: flex;
-  gap: var(--space-3);
-  align-items: flex-start;
+  flex-direction: column;
   padding: var(--space-4);
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-left: 3px solid var(--kpi-border, var(--secondary-500));
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   min-width: 0;
-  transition: box-shadow 0.15s ease, transform 0.15s ease;
+  transition: box-shadow 0.15s ease, transform 0.15s ease, border-color 0.15s ease;
 }
 
 .kpi-edit-btn {
@@ -409,29 +473,16 @@ button, input, select {
 }
 
 .kpi-clickable:hover {
-  border-left-width: 5px;
+  border-color: var(--color-primary);
 }
 
 .kpi-clickable:focus-visible {
-  outline: 2px solid var(--kpi-border, var(--secondary-500));
+  outline: 2px solid var(--color-primary);
   outline-offset: 2px;
-}
-
-.kpi-icon-badge {
-  width: 32px;
-  height: 32px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--kpi-badge-bg, var(--secondary-100));
-  color: var(--kpi-badge-fg, var(--secondary-700));
 }
 
 .kpi-body {
   min-width: 0;
-  flex: 1;
 }
 
 .kpi-label {
@@ -440,6 +491,13 @@ button, input, select {
   letter-spacing: 0.1em;
   color: var(--color-text-muted);
   margin-bottom: var(--space-2);
+}
+
+.kpi-value-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-2);
 }
 
 .kpi-value {
@@ -461,6 +519,26 @@ button, input, select {
 
 .kpi-value.accent { color: var(--danger-500); }
 
+/* Small pill next to the value — reuses the same ▲/▼ + signed-% convention
+   as comparison.ts's fmtChangeArrow, just rendered as a compact badge. */
+.kpi-trend-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success-700);
+  background: var(--success-100);
+  border-radius: var(--radius-full);
+  padding: 1px var(--space-2);
+  white-space: nowrap;
+}
+
+.kpi-trend-pill.down {
+  color: var(--danger-700);
+  background: var(--danger-100);
+}
+
 /* The exact figure behind a compacted kpi-value (e.g. "AED 5,185.91" under
    "AED 5.2K") — deliberately plainer than kpi-subtitle (no margin-top of
    its own; subtitle's margin already separates them when both are present)
@@ -475,6 +553,12 @@ button, input, select {
   margin-top: var(--space-1);
   font-size: 12px;
   color: var(--color-text-muted);
+}
+
+.kpi-sparkline {
+  width: 100%;
+  height: 32px;
+  margin-top: var(--space-3);
 }
 
 /* ---- chart grid ---- */
@@ -525,7 +609,7 @@ button, input, select {
   overflow-x: auto;
   overflow-y: hidden;
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
 }
 
@@ -577,6 +661,23 @@ table.data-table {
 .data-table tbody tr.clickable:hover {
   background: color-mix(in srgb, var(--color-primary) 6%, var(--color-surface));
 }
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.status-badge.status-success { background: var(--success-100); color: var(--success-700); }
+.status-badge.status-warning { background: var(--warning-100); color: var(--warning-700); }
+.status-badge.status-danger { background: var(--danger-100); color: var(--danger-700); }
+.status-badge.status-neutral { background: var(--neutral-200); color: var(--neutral-700); }
 
 /* ---- buttons / inputs ---- */
 
@@ -677,7 +778,10 @@ select.input {
 
 .app-header {
   display: flex;
-  align-items: center;
+  /* flex-start, not center — the title is now a 2-line block (title +
+     subtitle) and shouldn't fight .header-actions' own wrap behavior by
+     forcing it to vertically center against a taller sibling. */
+  align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-4);
   padding: var(--space-4) var(--space-8);
@@ -686,8 +790,19 @@ select.input {
   flex-wrap: wrap;
 }
 
+.header-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
 .header-title {
   font-size: 20px;
+}
+
+.header-subtitle {
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 
 .header-actions {
@@ -1106,6 +1221,7 @@ select.input {
 
   .sidebar-logo,
   .sidebar-nav-item span,
+  .sidebar-nav-group-label,
   .theme-toggle span {
     display: none;
   }

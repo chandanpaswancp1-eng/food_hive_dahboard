@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { TAB_IDS, TAB_LABELS, type TabId } from "@/lib/types";
+import { TAB_LABELS, type TabId } from "@/lib/types";
 import { TAB_ICONS } from "@/lib/tabIcons";
+import { TAB_GROUPS } from "@/lib/tabGroups";
 import { ThemeToggle } from "./ThemeToggle";
 
 export function Sidebar({ active, onChange }: { active: TabId; onChange: (t: TabId) => void }) {
@@ -27,19 +28,24 @@ export function Sidebar({ active, onChange }: { active: TabId; onChange: (t: Tab
         />
       </div>
       <nav className="sidebar-nav">
-        {TAB_IDS.map((id) => {
-          const Icon = TAB_ICONS[id];
-          return (
-            <button
-              key={id}
-              className={`sidebar-nav-item${id === active ? " active" : ""}`}
-              onClick={() => onChange(id)}
-            >
-              <Icon size={18} />
-              <span>{TAB_LABELS[id]}</span>
-            </button>
-          );
-        })}
+        {TAB_GROUPS.map((group) => (
+          <div className="sidebar-nav-group" key={group.label}>
+            <div className="sidebar-nav-group-label">{group.label}</div>
+            {group.tabs.map((id) => {
+              const Icon = TAB_ICONS[id];
+              return (
+                <button
+                  key={id}
+                  className={`sidebar-nav-item${id === active ? " active" : ""}`}
+                  onClick={() => onChange(id)}
+                >
+                  <Icon size={18} />
+                  <span>{TAB_LABELS[id]}</span>
+                </button>
+              );
+            })}
+          </div>
+        ))}
       </nav>
       <div className="sidebar-footer">
         <ThemeToggle />

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { DashboardFilters, DrillThroughRow, TabId } from "@/lib/types";
 import { fmtDateTimeGst } from "@/lib/format";
+import { statusToneFor } from "@/lib/statusBadge";
 import { InvoiceModal } from "./InvoiceModal";
 
 interface Props {
@@ -112,7 +113,9 @@ export function DrillThroughModal({ filters, scope, tab, onClose }: Props) {
                     <td>{r.location}</td>
                     <td>{r.channel}</td>
                     <td>{r.paymentMethod ?? "—"}</td>
-                    <td>{r.status}</td>
+                    <td>
+                      <span className={`status-badge status-${statusToneFor(r.status)}`}>{r.status}</span>
+                    </td>
                     <td className="num">{r.netSales.toFixed(0)}</td>
                     <td className="num">{r.actualPrepTime?.toFixed(1) ?? "—"}</td>
                     <td className="num">{r.rating ?? "—"}</td>

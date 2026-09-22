@@ -2,10 +2,18 @@
 
 import { SearchX } from "lucide-react";
 import type { TableSpec } from "@/lib/types";
+import { statusToneFor } from "@/lib/statusBadge";
 
 interface Props {
   spec: TableSpec;
   onRowClick?: (row: Record<string, string | number>) => void;
+}
+
+function renderCell(key: string, value: string | number) {
+  if (key.toLowerCase() === "status" && typeof value === "string") {
+    return <span className={`status-badge status-${statusToneFor(value)}`}>{value}</span>;
+  }
+  return value;
 }
 
 export function DataTable({ spec, onRowClick }: Props) {
@@ -31,7 +39,7 @@ export function DataTable({ spec, onRowClick }: Props) {
               <tr key={i} className={onRowClick ? "clickable" : undefined} onClick={() => onRowClick?.(row)}>
                 {spec.columns.map((c) => (
                   <td key={c.key} className={c.align === "right" ? "num" : undefined}>
-                    {row[c.key]}
+                    {renderCell(c.key, row[c.key])}
                   </td>
                 ))}
               </tr>

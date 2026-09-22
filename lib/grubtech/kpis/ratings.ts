@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { TabPayload } from "@/lib/types";
-import { fmtNumber, fmtNumberCompact, fmtPercent, safeDiv } from "@/lib/format";
+import { fmtNumber, fmtNumberCompact, fmtPercent, round2, safeDiv } from "@/lib/format";
 import { num, sortDesc } from "./shared";
 
 export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<TabPayload> {
@@ -94,6 +94,14 @@ export async function buildRatingsTab(where: Prisma.OrderWhereInput): Promise<Ta
       { key: "polarity", label: "Polarity Rate", value: fmtPercent(polarity) },
     ],
     charts: [
+      {
+        id: "avg-rating-gauge",
+        title: "Average Rating",
+        caption: `${avgRating.toFixed(2)} of 5 across ${fmtNumber(total)} ratings`,
+        type: "gauge",
+        labels: ["Average Rating"],
+        datasets: [{ label: "Average Rating", data: [round2(Math.max(0, Math.min(100, safeDiv(avgRating, 5) * 100)))] }],
+      },
       {
         id: "rating-distribution",
         title: "Rating Distribution",
