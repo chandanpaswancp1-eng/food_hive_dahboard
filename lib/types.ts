@@ -28,8 +28,8 @@ export const TAB_LABELS: Record<TabId, string> = {
 export const TAB_SUBTITLES: Record<TabId, string> = {
   income: "Take-home income, commissions, and margins across channels.",
   "order-details": "Gross and net sales, discounts, and order-level detail.",
-  weekly: "Week-over-week gross and net sales comparison.",
-  monthly: "Month-over-month gross and net sales comparison.",
+  weekly: "Week-over-week gross and net sales, plus hourly and weekday order patterns.",
+  monthly: "Month-over-month gross and net sales, plus hourly and weekday order patterns.",
   cancellations: "Cancelled orders, refunded amounts, and cancellation trends.",
   "prep-time": "Kitchen prep and dispatch timing by brand and branch.",
   ratings: "Customer ratings and sentiment across brands and locations.",
@@ -147,6 +147,8 @@ export interface TableSpec {
   itemDrillKey?: string;
   /** A pinned totals row rendered below the body — never clickable, so it can't be mistaken for a real drillable dimension value. */
   footerRow?: Record<string, string | number>;
+  /** Numeric body cells in these columns are shaded relative to the largest of them — a heatmap (e.g. orders by hour x weekday). */
+  heatmap?: { columns: string[] };
 }
 
 export interface StockoutEpisode {

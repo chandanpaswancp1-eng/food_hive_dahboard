@@ -16,7 +16,22 @@ function renderCell(key: string, value: string | number) {
   return value;
 }
 
+/** Shading for a heatmap cell — a tint of the theme's primary color, up to 60% at the table's max. */
+function heatStyle(value: string | number, max: number): React.CSSProperties | undefined {
+  if (typeof value !== "number" || max <= 0 || value <= 0) return undefined;
+  return { background: `color-mix(in srgb, var(--color-primary) ${Math.round((value / max) * 60)}%, transparent)` };
+}
+
 export function DataTable({ spec, onRowClick }: Props) {
+  const heatColumns = new Set(spec.heatmap?.columns);
+  let heatMax = 0;
+  for (const row of spec.rows) {
+    for (const key of heatColumns) {
+      const v = row[key];
+      if (typeof v === "number" && v > heatMax) heatMax = v;
+    }
+  }
+
   return (
     <div className="panel">
       <div className="panel-header">
@@ -38,7 +53,11 @@ export function DataTable({ spec, onRowClick }: Props) {
             {spec.rows.map((row, i) => (
               <tr key={i} className={onRowClick ? "clickable" : undefined} onClick={() => onRowClick?.(row)}>
                 {spec.columns.map((c) => (
-                  <td key={c.key} className={c.align === "right" ? "num" : undefined}>
+                  <td
+                    key={c.key}
+                    className={c.align === "right" ? "num" : undefined}
+                    style={heatColumns.has(c.key) ? heatStyle(row[c.key], heatMax) : undefined}
+                  >
                     {renderCell(c.key, row[c.key])}
                   </td>
                 ))}

@@ -2,7 +2,7 @@ import { prisma } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import type { ChartSpec, KpiValue, TabId, TabPayload, TableSpec } from "@/lib/types";
 import { fmtCurrency, fmtCurrencyCompact, fmtCurrencyExact, fmtNumber, round2 } from "@/lib/format";
-import { bucketIndexOf, type PeriodBucket } from "@/lib/grubtech/weeks";
+import { bucketIndexOf, weekdayOfKey, type PeriodBucket } from "@/lib/grubtech/weeks";
 import { loadDimensionMaps, num, sortDesc } from "./shared";
 
 /**
@@ -14,6 +14,19 @@ import { loadDimensionMaps, num, sortDesc } from "./shared";
 
 /** Most recent periods that get their own KPI cards — charts and tables still show every period in range. */
 const KPI_PERIODS = 6;
+
+/** Display order for the weekday views — Monday first; values are getUTCDay() indices. */
+const WEEKDAYS: { day: number; label: string }[] = [
+  { day: 1, label: "Mon" },
+  { day: 2, label: "Tue" },
+  { day: 3, label: "Wed" },
+  { day: 4, label: "Thu" },
+  { day: 5, label: "Fri" },
+  { day: 6, label: "Sat" },
+  { day: 0, label: "Sun" },
+];
+const HOURS = Array.from({ length: 24 }, (_, h) => h);
+const HOUR_LABELS = HOURS.map((h) => `${h}:00`);
 
 type Metric = "net" | "gross" | "orders";
 
@@ -83,12 +96,18 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
   const idPrefix = tab; // "weekly" | "monthly"
   const keyPrefix = noun === "Week" ? "w" : "m";
 
-  const [dims, byDateChannelGroups] = await Promise.all([
+  const [dims, byDateChannelGroups, byDateHourGroups] = await Promise.all([
     loadDimensionMaps(),
     prisma.order.groupBy({
       by: ["receivedDateKey", "channelId"],
       where: o.where,
       _sum: { netSales: true, receiptTotal: true, discountAmount: true },
+      _count: { _all: true },
+    }),
+    prisma.order.groupBy({
+      by: ["receivedDateKey", "hour"],
+      where: o.where,
+      _sum: { netSales: true },
       _count: { _all: true },
     }),
   ]);
@@ -114,6 +133,26 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
       t.orders[p] += orders;
     }
     byChannel.set(g.channelId, channelTotals);
+  }
+
+  // ---- Time-of-day aggregation: hour x weekday, weekday totals, hour x period
+  // All weekday indices are getUTCDay()'s (0 = Sunday); WEEKDAYS sets display order.
+  const hourByWeekday = Array.from({ length: 7 }, () => new Array(24).fill(0));
+  const weekdayOrders = new Array(7).fill(0);
+  const weekdayNet = new Array(7).fill(0);
+  const hourByBucket = buckets.map(() => new Array(24).fill(0));
+  for (const g of byDateHourGroups) {
+    if (!g.receivedDateKey) continue;
+    const p = bucketIndexOf(g.receivedDateKey, buckets);
+    if (p < 0) continue;
+    const d = weekdayOfKey(g.receivedDateKey);
+    const orders = g._count._all;
+    weekdayOrders[d] += orders;
+    weekdayNet[d] += num(g._sum.netSales);
+    // Orders with no recorded hour still count toward weekday totals above.
+    if (g.hour === null) continue;
+    hourByWeekday[d][g.hour] += orders;
+    hourByBucket[p][g.hour] += orders;
   }
 
   const channelRows = sortDesc(
@@ -243,6 +282,44 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
         kind: "line" as const,
       })),
     },
+    {
+      id: `${idPrefix}-orders-by-hour-latest-vs-prev`,
+      title: `Orders by Hour — ${latest.label} vs Previous ${noun}`,
+      caption: `Orders received in each hour · dashed: previous ${nounLower}`,
+      type: "line",
+      labels: HOUR_LABELS,
+      // Actual counts — a partial latest period carries its day count in the
+      // label (e.g. "Week 4 (3d)") so its lower line isn't read as a drop.
+      datasets: buckets.slice(-2).reverse().map((p, i) => ({
+        label: `${chartLabel(p)} · ${p.rangeLabel}`,
+        data: hourByBucket[p.index],
+        kind: "line" as const,
+        dashed: i === 1,
+      })),
+    },
+    {
+      id: `${idPrefix}-hourly-by-weekday`,
+      title: "Orders by Hour — Weekday Comparison",
+      caption: "Orders received in each hour · one line per weekday",
+      type: "line",
+      labels: HOUR_LABELS,
+      datasets: WEEKDAYS.map(({ day, label }) => ({
+        label,
+        data: hourByWeekday[day],
+        kind: "line" as const,
+      })),
+    },
+    {
+      id: `${idPrefix}-weekday-totals`,
+      title: "Sales & Orders by Weekday",
+      caption: "Bars: net sales · Line: orders",
+      type: "combo",
+      labels: WEEKDAYS.map((w) => w.label),
+      datasets: [
+        { label: "Net Sales", data: WEEKDAYS.map(({ day }) => round2(weekdayNet[day])), kind: "bar", yAxisId: "y" },
+        { label: "Orders", data: WEEKDAYS.map(({ day }) => weekdayOrders[day]), kind: "line", yAxisId: "y1" },
+      ],
+    },
   ];
 
   // ---- Tables: aggregator x period matrices, with a pinned Total row -----
@@ -281,6 +358,27 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
   const perDay = (c: { totals: Totals } | null) => (c ? c.totals.net : overall.net).map((v, i) => v / buckets[i].days);
   const perDayChange = (values: number[], p: number): number | null => (p === 0 ? null : plainChangePct(values[p], values[p - 1]));
 
+  const hourKeys = HOURS.map((h) => `h${h}`);
+  const hourGrid: TableSpec = {
+    title: "Orders by Hour × Weekday",
+    columns: [
+      { key: "weekday", label: "Weekday" },
+      ...HOURS.map((h) => ({ key: `h${h}`, label: HOUR_LABELS[h], align: "right" as const })),
+      { key: "total", label: "Total", align: "right" as const },
+    ],
+    rows: WEEKDAYS.map(({ day, label }) => ({
+      weekday: label,
+      ...Object.fromEntries(HOURS.map((h) => [`h${h}`, hourByWeekday[day][h]])),
+      total: weekdayOrders[day],
+    })),
+    footerRow: {
+      weekday: "Total",
+      ...Object.fromEntries(HOURS.map((h) => [`h${h}`, hourByWeekday.reduce((a, row) => a + row[h], 0)])),
+      total: totalOrders,
+    },
+    heatmap: { columns: hourKeys },
+  };
+
   return {
     kpis,
     charts,
@@ -289,6 +387,7 @@ export async function buildComparisonTab(o: ComparisonOptions): Promise<TabPaylo
       matrixTable(`Gross Sales by Aggregator × ${noun}`, metricSeries("gross"), fmtCurrency),
       matrixTable(`Orders by Aggregator × ${noun}`, metricSeries("orders"), fmtNumber),
       ...(o.perDayTable ? [matrixTable(`Net Sales per Day by Aggregator × ${noun}`, perDay, fmtCurrency, perDayChange)] : []),
+      hourGrid,
     ],
     scope: { orderCount: totalOrders },
   };

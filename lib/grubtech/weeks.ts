@@ -116,3 +116,9 @@ export function buildWeeks(from: string, to: string): PeriodBucket[] {
 export function bucketIndexOf(dateKey: string, weeks: PeriodBucket[]): number {
   return weeks.findIndex((w) => dateKey >= w.start && dateKey <= w.end);
 }
+
+/** Day of week (0 = Sunday … 6 = Saturday) of a "YYYY-MM-DD" key — already a Dubai-local date, so no shifting. */
+export function weekdayOfKey(key: string): number {
+  return new Date(toMs(key)).getUTCDay();
+}
+
