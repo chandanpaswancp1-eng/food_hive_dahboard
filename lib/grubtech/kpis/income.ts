@@ -12,12 +12,16 @@ import {
   safeDiv,
 } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
+import { isTestFixtureName } from "@/lib/grubtech/testFixture";
 import { dubaiDateKey, daysInDubaiMonth } from "@/lib/grubtech/dubaiTime";
 
-// Excluded from the per-portal commission KPI cards: Pickup/Take Away are
-// direct, no-commission channels rather than real third-party portals, and
-// "Grubtech Test" is GrubCenter's own sandbox channel.
-const NON_PORTAL_CHANNELS = new Set(["Pickup", "Take Away", "Grubtech Test"]);
+// Excluded from the per-portal commission KPI cards: Pickup/Take Away/Dine in
+// are direct, no-commission channels rather than real third-party portals,
+// and "Grubtech Test" is GrubCenter's own sandbox channel. Matched
+// case-insensitively. Any other channel that appears in the data gets its
+// own card automatically.
+const NON_PORTAL_CHANNELS = new Set(["pickup", "take away", "dine in", "grubtech test"]);
+const isPortal = (channel: string) => !NON_PORTAL_CHANNELS.has(channel.toLowerCase());
 
 /** Inclusive day count between two "YYYY-MM-DD" calendar-date strings. */
 function daysBetweenInclusive(fromKey: string, toKey: string): number {
@@ -109,6 +113,10 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
   // the per-portal KPI card's breakdown subtitle — every other consumer
   // (brand/month re-attribution, totals, tables) uses the combined rate.
   const commissionRateByChannel = new Map(channels.map((c) => [c.id, Number(c.commissionRate ?? 0)]));
+  // A portal that first shows up via sync has no rate yet — counted as 0%
+  // until someone sets one, which silently overstates take-home income.
+  // Tracked so the cards can say so instead (an explicit 0 is a real rate).
+  const rateUnsetChannels = new Set(channels.filter((c) => c.commissionRate === null).map((c) => c.id));
   const deliveryChargeRateByChannel = new Map(channels.map((c) => [c.id, Number(c.deliveryChargeRate ?? 0)]));
 
   const netSales = num(totals._sum.netSales);
@@ -131,6 +139,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       rate,
       commissionRate,
       deliveryChargeRate,
+      rateUnset: rateUnsetChannels.has(g.channelId),
       commission: round2(chNetSales * (rate / 100)),
     };
   });
@@ -162,11 +171,24 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       rate: c.rate,
       commissionRate: c.commissionRate,
       deliveryChargeRate: c.deliveryChargeRate,
+      rateUnset: c.rateUnset,
       commission: c.commission,
       takeHome: round2(c.netSales - c.commission),
     })),
     (v) => v.takeHome,
   );
+  const portalRows = channelRows.filter((c) => isPortal(c.channel));
+  // Portals with no rate that have no completed sales in scope (e.g. a new
+  // portal whose first order was cancelled) still get a card, so the rate
+  // can be set before it starts counting — unless a channel filter excludes them.
+  const shownChannelIds = new Set(channelCommissions.map((c) => c.channelId));
+  const pendingPortals = [...rateUnsetChannels]
+    .filter((id) => !shownChannelIds.has(id))
+    .map((id) => dims.channels.get(id)?.name)
+    .filter((name): name is string => Boolean(name) && isPortal(name!) && !isTestFixtureName("channel", name!))
+    .filter((name) => !filters.channels?.length || filters.channels.includes(name));
+  const unsetPortals = portalRows.filter((c) => c.rateUnset).map((c) => c.channel);
+  const unsetNote = unsetPortals.length ? `Excludes ${unsetPortals.join(", ")} — commission rate not set` : undefined;
 
   // ---- brand breakdown (commission re-attributed via brand x channel) ----
   const brandCommission = new Map<string, number>();
@@ -326,7 +348,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         label: "Take-Home Income",
         value: fmtCurrencyCompact(takeHomeIncome),
         fullValue: fmtCurrencyExact(takeHomeIncome),
-        subtitle: "Net sales minus platform commission & delivery charge",
+        subtitle: unsetNote ?? "Net sales minus platform commission & delivery charge",
         sparkline: takeHomeSparkline,
       },
       { key: "grossRevenue", label: "Gross Revenue", value: fmtCurrencyCompact(grossRevenue), fullValue: fmtCurrencyExact(grossRevenue) },
@@ -334,7 +356,14 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
 
       // Group 2 — the two deductions between gross and take-home.
       { key: "totalDiscount", label: "Discounts Given", value: fmtCurrencyCompact(totalDiscount), fullValue: fmtCurrencyExact(totalDiscount), accent: true },
-      { key: "totalCommission", label: "Platform Commission", value: fmtCurrencyCompact(totalCommission), fullValue: fmtCurrencyExact(totalCommission), accent: true },
+      {
+        key: "totalCommission",
+        label: "Platform Commission",
+        value: fmtCurrencyCompact(totalCommission),
+        fullValue: fmtCurrencyExact(totalCommission),
+        subtitle: unsetNote,
+        accent: true,
+      },
       { key: "marginPct", label: "Take-Home Margin", value: fmtPercent(takeHomeMarginPct) },
 
       // Group 3 — pace.
@@ -374,12 +403,14 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       // third-party portals, and "Grubtech Test" is GrubCenter's own sandbox
       // channel — none of the three belong in a per-portal commission
       // breakdown.
-      ...channelRows.filter((c) => !NON_PORTAL_CHANNELS.has(c.channel)).map((c) => ({
+      ...portalRows.map((c) => ({
         key: `portalCommission_${c.channel}`,
         label: `${c.channel} Commission`,
-        value: fmtCurrencyCompact(c.commission),
-        fullValue: fmtCurrencyExact(c.commission),
-        subtitle: `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery of ${fmtCurrencyCompact(c.netSales)} net sales`,
+        value: c.rateUnset ? "Rate not set" : fmtCurrencyCompact(c.commission),
+        fullValue: c.rateUnset ? undefined : fmtCurrencyExact(c.commission),
+        subtitle: c.rateUnset
+          ? `New portal · ${fmtCurrencyCompact(c.netSales)} net sales · click ✎ to set its commission`
+          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery of ${fmtCurrencyCompact(c.netSales)} net sales`,
         accent: true,
         drillFilter: { channels: [c.channel] },
         editCommission: {
@@ -387,6 +418,14 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
           currentCommissionRate: c.commissionRate,
           currentDeliveryChargeRate: c.deliveryChargeRate,
         },
+      })),
+      ...pendingPortals.map((channel) => ({
+        key: `portalCommission_${channel}`,
+        label: `${channel} Commission`,
+        value: "Rate not set",
+        subtitle: "New portal · no completed orders yet · click ✎ to set its commission",
+        accent: true,
+        editCommission: { channel, currentCommissionRate: 0, currentDeliveryChargeRate: 0 },
       })),
 
       // Group 6 — cash vs. card actually handed over at the point of sale,
