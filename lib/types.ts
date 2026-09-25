@@ -91,12 +91,24 @@ export interface KpiValue {
    */
   drillTab?: TabId;
   drillFilter?: Partial<DashboardFilters>;
-  /** Marks this card as commission-rate-editable for `channel`, prefilled with both current rates — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
-  editCommission?: { channel: string; currentCommissionRate: number; currentDeliveryChargeRate: number };
+  /** Marks this card as commission-editable for `channel`, prefilled with its current settings — opens the Edit Commission modal instead of (not in addition to) the drill-through. */
+  editCommission?: CommissionSettings;
   /** Structured period-over-period change, rendered as a small colored pill (▲/▼ + %). Positive/negative sign drives the arrow direction and color. */
   trend?: { pct: number; label?: string };
   /** Ascending-chronological values for a small embedded sparkline — set only on select headline metrics where the builder already has a per-day/per-period series on hand. */
   sparkline?: number[];
+}
+
+/** A portal's deductions as edited in the Commission modal (app/api/channels/commission). */
+export interface CommissionSettings {
+  channel: string;
+  currentCommissionRate: number;
+  /** Delivery or payment-handling fee, % of net sales — deducted together with the commission rate. */
+  currentDeliveryChargeRate: number;
+  /** Flat AED fee per completed order (e.g. Talabat Pro's AED 4); 0 when none. */
+  currentPerOrderFee: number;
+  /** The per-order fee applies only to orders of at least this post-discount value (AED); 0 = every order. */
+  currentPerOrderFeeMinOrder: number;
 }
 
 export type ChartType = "bar" | "hbar" | "line" | "doughnut" | "combo" | "gauge";

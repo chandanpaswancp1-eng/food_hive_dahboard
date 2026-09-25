@@ -2,18 +2,20 @@
 
 import { useState } from "react";
 import type { KeyboardEvent } from "react";
+import type { CommissionSettings } from "@/lib/types";
 
 interface Props {
-  channel: string;
-  currentRate: number;
-  currentDeliveryChargeRate: number;
+  settings: CommissionSettings;
   onClose: () => void;
   onSaved: () => void;
 }
 
-export function CommissionModal({ channel, currentRate, currentDeliveryChargeRate, onClose, onSaved }: Props) {
-  const [rate, setRate] = useState(String(currentRate));
-  const [deliveryChargeRate, setDeliveryChargeRate] = useState(String(currentDeliveryChargeRate));
+export function CommissionModal({ settings, onClose, onSaved }: Props) {
+  const { channel } = settings;
+  const [rate, setRate] = useState(String(settings.currentCommissionRate));
+  const [deliveryChargeRate, setDeliveryChargeRate] = useState(String(settings.currentDeliveryChargeRate));
+  const [perOrderFee, setPerOrderFee] = useState(String(settings.currentPerOrderFee));
+  const [perOrderFeeMinOrder, setPerOrderFeeMinOrder] = useState(String(settings.currentPerOrderFeeMinOrder));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +27,17 @@ export function CommissionModal({ channel, currentRate, currentDeliveryChargeRat
     }
     const parsedDelivery = Number(deliveryChargeRate);
     if (!Number.isFinite(parsedDelivery) || parsedDelivery < 0 || parsedDelivery > 100) {
-      setError("Enter a delivery charge rate between 0 and 100");
+      setError("Enter a delivery / payment fee between 0 and 100");
+      return;
+    }
+    const parsedFee = Number(perOrderFee);
+    if (!Number.isFinite(parsedFee) || parsedFee < 0) {
+      setError("Enter a per-order fee of 0 or more");
+      return;
+    }
+    const parsedMinOrder = Number(perOrderFeeMinOrder);
+    if (!Number.isFinite(parsedMinOrder) || parsedMinOrder < 0) {
+      setError("Enter a minimum order value of 0 or more");
       return;
     }
     setSaving(true);
@@ -34,7 +46,13 @@ export function CommissionModal({ channel, currentRate, currentDeliveryChargeRat
       const res = await fetch("/api/channels/commission", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ channel, commissionRate: parsed, deliveryChargeRate: parsedDelivery }),
+        body: JSON.stringify({
+          channel,
+          commissionRate: parsed,
+          deliveryChargeRate: parsedDelivery,
+          perOrderFee: parsedFee,
+          perOrderFeeMinOrder: parsedMinOrder,
+        }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -52,6 +70,9 @@ export function CommissionModal({ channel, currentRate, currentDeliveryChargeRat
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSave();
   };
+
+  const labelGap = { marginTop: "var(--space-3)" };
+  const hint = { marginTop: "var(--space-2)", fontSize: "0.85em", color: "var(--color-text-muted)" };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -81,8 +102,8 @@ export function CommissionModal({ channel, currentRate, currentDeliveryChargeRat
             onKeyDown={handleKeyDown}
             autoFocus
           />
-          <label className="invoice-label" htmlFor="delivery-charge-rate-input" style={{ marginTop: "var(--space-3)" }}>
-            Delivery charge rate (%)
+          <label className="invoice-label" htmlFor="delivery-charge-rate-input" style={labelGap}>
+            Delivery / payment fee (%)
           </label>
           <input
             id="delivery-charge-rate-input"
@@ -95,9 +116,34 @@ export function CommissionModal({ channel, currentRate, currentDeliveryChargeRat
             onChange={(e) => setDeliveryChargeRate(e.target.value)}
             onKeyDown={handleKeyDown}
           />
-          <div style={{ marginTop: "var(--space-2)", fontSize: "0.85em", color: "var(--color-text-muted)" }}>
-            Both are deducted from net sales as a combined commission.
-          </div>
+          <div style={hint}>Both % rates are deducted from net sales as a combined commission.</div>
+          <label className="invoice-label" htmlFor="per-order-fee-input" style={labelGap}>
+            Per-order fee (AED)
+          </label>
+          <input
+            id="per-order-fee-input"
+            className="input"
+            type="number"
+            min={0}
+            step={0.01}
+            value={perOrderFee}
+            onChange={(e) => setPerOrderFee(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <label className="invoice-label" htmlFor="per-order-fee-min-input" style={labelGap}>
+            …only on orders of at least (AED, after discounts)
+          </label>
+          <input
+            id="per-order-fee-min-input"
+            className="input"
+            type="number"
+            min={0}
+            step={0.01}
+            value={perOrderFeeMinOrder}
+            onChange={(e) => setPerOrderFeeMinOrder(e.target.value)}
+            onKeyDown={handleKeyDown}
+          />
+          <div style={hint}>A flat fee per completed order, e.g. Talabat Pro&apos;s AED 4 on orders of AED 30+. Use 0 for none.</div>
           {error && <div className="empty-state">{error}</div>}
           <div style={{ display: "flex", gap: "var(--space-2)", marginTop: "var(--space-4)" }}>
             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>

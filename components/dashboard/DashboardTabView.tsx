@@ -6,7 +6,7 @@ import { ChartPanel } from "./ChartPanel";
 import { DataTable } from "./DataTable";
 import { TabImportButton } from "./TabImportButton";
 import { MonthPicker } from "./MonthPicker";
-import type { DashboardFilters, FilterOptions, ReportTypeHint, TabId, TabPayload, TableSpec } from "@/lib/types";
+import type { CommissionSettings, DashboardFilters, FilterOptions, ReportTypeHint, TabId, TabPayload, TableSpec } from "@/lib/types";
 import { filterFromTableRow, isDrillableTable } from "@/lib/drillthrough";
 
 interface Props {
@@ -21,7 +21,7 @@ interface Props {
   onImport: (file: File, hint?: ReportTypeHint) => void;
   onDrill: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
   onItemDrill: (item: string) => void;
-  onEditCommission?: (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => void;
+  onEditCommission?: (settings: CommissionSettings) => void;
 }
 
 /**

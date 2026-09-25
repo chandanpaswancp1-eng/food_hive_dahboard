@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type DragEvent } from "react";
 import { Check, GripVertical, Pencil, Settings2 } from "lucide-react";
-import type { DashboardFilters, KpiValue, TabId } from "@/lib/types";
+import type { CommissionSettings, DashboardFilters, KpiValue, TabId } from "@/lib/types";
 import { Sparkline } from "./Sparkline";
 import { clearKpiOrder, loadKpiOrder, saveKpiOrder } from "@/lib/kpiOrder";
 
@@ -10,7 +10,7 @@ interface Props {
   kpis: KpiValue[];
   activeTab: TabId;
   onDrill?: (filter: Partial<DashboardFilters>, tabOverride?: TabId) => void;
-  onEditCommission?: (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => void;
+  onEditCommission?: (settings: CommissionSettings) => void;
 }
 
 interface Chunk {
@@ -105,14 +105,10 @@ export function KpiStrip({ kpis, activeTab, onDrill, onEditCommission }: Props) 
         <button
           type="button"
           className="kpi-edit-btn"
-          title="Edit commission %"
+          title="Edit commission & fees"
           onClick={(e) => {
             e.stopPropagation();
-            onEditCommission(
-              k.editCommission!.channel,
-              k.editCommission!.currentCommissionRate,
-              k.editCommission!.currentDeliveryChargeRate,
-            );
+            onEditCommission(k.editCommission!);
           }}
         >
           <Pencil size={12} />

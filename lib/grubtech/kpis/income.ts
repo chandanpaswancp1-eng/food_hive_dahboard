@@ -65,7 +65,9 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       _max: { receivedAt: true },
     }),
     loadDimensionMaps(),
-    prisma.channel.findMany({ select: { id: true, commissionRate: true, deliveryChargeRate: true } }),
+    prisma.channel.findMany({
+      select: { id: true, commissionRate: true, deliveryChargeRate: true, perOrderFee: true, perOrderFeeMinOrder: true },
+    }),
     prisma.order.groupBy({
       by: ["brandId"],
       where,
@@ -113,6 +115,38 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
   const rateUnsetChannels = new Set(channels.filter((c) => c.commissionRate === null).map((c) => c.id));
   const deliveryChargeRateByChannel = new Map(channels.map((c) => [c.id, Number(c.deliveryChargeRate ?? 0)]));
 
+  // ---- flat per-order fees (e.g. Talabat Pro: AED 4 on orders of AED 30+) ----
+  // Counted per day x brand x channel in one query — only orders at or above
+  // each channel's post-discount minimum (receiptTotal) — then added to every
+  // commission breakdown below alongside the % rates.
+  const feeChannels = channels
+    .filter((c) => Number(c.perOrderFee ?? 0) > 0)
+    .map((c) => ({ id: c.id, fee: Number(c.perOrderFee), minOrder: Number(c.perOrderFeeMinOrder ?? 0) }));
+  const feeGroups = feeChannels.length
+    ? await prisma.order.groupBy({
+        by: ["receivedDateKey", "brandId", "channelId"],
+        where: {
+          AND: [where, { OR: feeChannels.map((c) => ({ channelId: c.id, receiptTotal: { gte: c.minOrder } })) }],
+        },
+        _count: { _all: true },
+      })
+    : [];
+  const feePerOrder = new Map(feeChannels.map((c) => [c.id, c.fee]));
+  const feeByChannel = new Map<string, number>();
+  const feeOrdersByChannel = new Map<string, number>();
+  const feeByBrand = new Map<string, number>();
+  const feeByDay = new Map<string, number>();
+  const addTo = (m: Map<string, number>, k: string, v: number) => m.set(k, (m.get(k) ?? 0) + v);
+  for (const g of feeGroups) {
+    const fee = g._count._all * (feePerOrder.get(g.channelId) ?? 0);
+    addTo(feeByChannel, g.channelId, fee);
+    addTo(feeOrdersByChannel, g.channelId, g._count._all);
+    addTo(feeByBrand, g.brandId, fee);
+    if (g.receivedDateKey) addTo(feeByDay, g.receivedDateKey, fee);
+  }
+  const perOrderFeeByChannel = new Map(channels.map((c) => [c.id, Number(c.perOrderFee ?? 0)]));
+  const perOrderFeeMinByChannel = new Map(channels.map((c) => [c.id, Number(c.perOrderFeeMinOrder ?? 0)]));
+
   const netSales = num(totals._sum.netSales);
   const receiptTotal = num(totals._sum.receiptTotal);
   const totalDiscount = num(totals._sum.discountAmount);
@@ -134,7 +168,10 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       commissionRate,
       deliveryChargeRate,
       rateUnset: rateUnsetChannels.has(g.channelId),
-      commission: round2(chNetSales * (rate / 100)),
+      perOrderFee: perOrderFeeByChannel.get(g.channelId) ?? 0,
+      perOrderFeeMinOrder: perOrderFeeMinByChannel.get(g.channelId) ?? 0,
+      feeOrders: feeOrdersByChannel.get(g.channelId) ?? 0,
+      commission: round2(chNetSales * (rate / 100) + (feeByChannel.get(g.channelId) ?? 0)),
     };
   });
   const totalCommission = round2(channelCommissions.reduce((sum, c) => sum + c.commission, 0));
@@ -166,6 +203,9 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       commissionRate: c.commissionRate,
       deliveryChargeRate: c.deliveryChargeRate,
       rateUnset: c.rateUnset,
+      perOrderFee: c.perOrderFee,
+      perOrderFeeMinOrder: c.perOrderFeeMinOrder,
+      feeOrders: c.feeOrders,
       commission: c.commission,
       takeHome: round2(c.netSales - c.commission),
     })),
@@ -184,6 +224,8 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
       rateUnset: c.commissionRate === null,
       commissionRate: Number(c.commissionRate ?? 0),
       deliveryChargeRate: Number(c.deliveryChargeRate ?? 0),
+      perOrderFee: Number(c.perOrderFee ?? 0),
+      perOrderFeeMinOrder: Number(c.perOrderFeeMinOrder ?? 0),
     }))
     .filter((c) => c.channel && isPortal(c.channel))
     .filter((c) => !filters.channels?.length || filters.channels.includes(c.channel));
@@ -197,6 +239,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     const prev = brandCommission.get(g.brandId) ?? 0;
     brandCommission.set(g.brandId, prev + num(g._sum.netSales) * (rate / 100));
   }
+  for (const [brandId, fee] of feeByBrand) addTo(brandCommission, brandId, fee);
   const brandRows = sortDesc(
     byBrandGroups.map((g) => {
       const bNetSales = num(g._sum.netSales);
@@ -228,6 +271,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     const prev = monthCommission.get(month) ?? 0;
     monthCommission.set(month, prev + num(g._sum.netSales) * (rate / 100));
   }
+  for (const [day, fee] of feeByDay) addTo(monthCommission, day.slice(0, 7), fee);
 
   interface MonthAgg {
     netSales: number;
@@ -257,6 +301,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     const prev = dayCommission.get(g.receivedDateKey) ?? 0;
     dayCommission.set(g.receivedDateKey, prev + num(g._sum.netSales) * (rate / 100));
   }
+  for (const [day, fee] of feeByDay) addTo(dayCommission, day, fee);
   const dayNetSales = new Map<string, number>();
   for (const g of byDateGroups) {
     if (!g.receivedDateKey) continue;
@@ -348,7 +393,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         label: "Take-Home Income",
         value: fmtCurrencyCompact(takeHomeIncome),
         fullValue: fmtCurrencyExact(takeHomeIncome),
-        subtitle: unsetNote ?? "Net sales minus platform commission & delivery charge",
+        subtitle: unsetNote ?? "Net sales minus platform commission & fees",
         sparkline: takeHomeSparkline,
       },
       { key: "grossRevenue", label: "Gross Revenue", value: fmtCurrencyCompact(grossRevenue), fullValue: fmtCurrencyExact(grossRevenue) },
@@ -410,13 +455,16 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         fullValue: c.rateUnset ? undefined : fmtCurrencyExact(c.commission),
         subtitle: c.rateUnset
           ? `New portal · ${fmtCurrencyCompact(c.netSales)} net sales · click ✎ to set its commission`
-          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery of ${fmtCurrencyCompact(c.netSales)} net sales`,
+          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} fee of ${fmtCurrencyCompact(c.netSales)} net sales` +
+            (c.perOrderFee > 0 ? ` + ${fmtCurrency(c.perOrderFee)} × ${fmtNumber(c.feeOrders)} orders` : ""),
         accent: true,
         drillFilter: { channels: [c.channel] },
         editCommission: {
           channel: c.channel,
           currentCommissionRate: c.commissionRate,
           currentDeliveryChargeRate: c.deliveryChargeRate,
+          currentPerOrderFee: c.perOrderFee,
+          currentPerOrderFeeMinOrder: c.perOrderFeeMinOrder,
         },
       })),
       ...idlePortals.map((c) => ({
@@ -425,12 +473,16 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         value: c.rateUnset ? "Rate not set" : fmtCurrencyCompact(0),
         subtitle: c.rateUnset
           ? "New portal · no completed orders yet · click ✎ to set its commission"
-          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery · no completed orders in range`,
+          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} fee` +
+            (c.perOrderFee > 0 ? ` + ${fmtCurrency(c.perOrderFee)}/order` : "") +
+            " · no completed orders in range",
         accent: true,
         editCommission: {
           channel: c.channel,
           currentCommissionRate: c.commissionRate,
           currentDeliveryChargeRate: c.deliveryChargeRate,
+          currentPerOrderFee: c.perOrderFee,
+          currentPerOrderFeeMinOrder: c.perOrderFeeMinOrder,
         },
       })),
 
@@ -559,7 +611,7 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         title: "Income by Channel",
         columns: [
           { key: "channel", label: "Channel" },
-          { key: "rate", label: "Commission + Delivery Rate", align: "right" },
+          { key: "rate", label: "Commission + Fees", align: "right" },
           { key: "netSales", label: "Net Sales", align: "right" },
           { key: "commission", label: "Commission", align: "right" },
           { key: "takeHome", label: "Take-Home Income", align: "right" },
@@ -567,7 +619,9 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
         ],
         rows: channelRows.map((c) => ({
           channel: c.channel,
-          rate: `${fmtPercent(c.commissionRate)} + ${fmtPercent(c.deliveryChargeRate)}`,
+          rate:
+            `${fmtPercent(c.commissionRate)} + ${fmtPercent(c.deliveryChargeRate)}` +
+            (c.perOrderFee > 0 ? ` + ${fmtCurrency(c.perOrderFee)}/order` : ""),
           netSales: fmtCurrency(c.netSales),
           commission: fmtCurrency(c.commission),
           takeHome: fmtCurrency(c.takeHome),

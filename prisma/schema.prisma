@@ -53,6 +53,11 @@ model Channel {
   channelType    String?
   commissionRate Decimal?        @db.Decimal(5, 2)
   deliveryChargeRate Decimal?    @db.Decimal(5, 2)
+  /// Flat AED fee per completed order on top of the % rates (e.g. Talabat's
+  /// AED 4 Pro contribution), charged only when the order's post-discount
+  /// value (receiptTotal) is at least perOrderFeeMinOrder.
+  perOrderFee         Decimal?   @db.Decimal(8, 2)
+  perOrderFeeMinOrder Decimal?   @db.Decimal(8, 2)
   orders         Order[]
   stockouts      StockoutEvent[]
   createdAt      DateTime        @default(now())

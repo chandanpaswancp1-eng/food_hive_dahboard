@@ -10,6 +10,7 @@ import { StockoutDrillModal } from "@/components/dashboard/StockoutDrillModal";
 import { CommissionModal } from "@/components/dashboard/CommissionModal";
 import type {
   AlertsPayload,
+  CommissionSettings,
   DashboardFilters,
   FilterOptions,
   PortalStatusPayload,
@@ -72,11 +73,7 @@ export default function DashboardPage() {
   // not whatever the currently active dashboard tab happens to be.
   const [drillTab, setDrillTab] = useState<TabId | null>(null);
   const [itemDrillTarget, setItemDrillTarget] = useState<string | null>(null);
-  const [editCommission, setEditCommission] = useState<{
-    channel: string;
-    currentCommissionRate: number;
-    currentDeliveryChargeRate: number;
-  } | null>(null);
+  const [editCommission, setEditCommission] = useState<CommissionSettings | null>(null);
   const [dbError, setDbError] = useState<string | null>(null);
   const [manualSyncing, setManualSyncing] = useState(false);
   // Drives the auto-refresh effects below (filter options, sync status, tab
@@ -238,8 +235,8 @@ export default function DashboardPage() {
     setItemDrillTarget(item);
   };
 
-  const handleEditCommission = (channel: string, currentCommissionRate: number, currentDeliveryChargeRate: number) => {
-    setEditCommission({ channel, currentCommissionRate, currentDeliveryChargeRate });
+  const handleEditCommission = (settings: CommissionSettings) => {
+    setEditCommission(settings);
   };
 
   const handleImport = async (file: File, reportTypeHint?: ReportTypeHint) => {
@@ -376,9 +373,7 @@ export default function DashboardPage() {
       )}
       {editCommission && (
         <CommissionModal
-          channel={editCommission.channel}
-          currentRate={editCommission.currentCommissionRate}
-          currentDeliveryChargeRate={editCommission.currentDeliveryChargeRate}
+          settings={editCommission}
           onClose={() => setEditCommission(null)}
           onSaved={() => {
             setEditCommission(null);
