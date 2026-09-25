@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Header } from "@/components/dashboard/Header";
 import { FilterBar } from "@/components/dashboard/FilterBar";
 import { Sidebar } from "@/components/dashboard/Sidebar";
@@ -24,6 +24,9 @@ import type {
 // this fast preserves both a responsive live-data feel and the DB-error
 // self-heal behavior below.
 const DASHBOARD_POLL_INTERVAL_MS = 5_000;
+
+/** Filter options (brands, channels, months, …) change rarely — refreshed every 5 minutes of polling. */
+const FILTER_OPTIONS_REFRESH_TICKS = (5 * 60_000) / DASHBOARD_POLL_INTERVAL_MS;
 
 function filtersToParams(filters: DashboardFilters): string {
   const params = new URLSearchParams();
@@ -85,6 +88,7 @@ export default function DashboardPage() {
   // return so the view is never more than DASHBOARD_POLL_INTERVAL_MS stale
   // when the user comes back to it.
   const [retryTick, setRetryTick] = useState(0);
+  const optionsFetchedTick = useRef<number | null>(null);
 
   useEffect(() => {
     let id: ReturnType<typeof setInterval> | null = null;
@@ -115,7 +119,14 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (options) return; // already loaded — no need to keep polling
+    // Retried every tick until the first load succeeds, then only every few
+    // minutes — enough to pick up a new month (the Weekly month picker), brand,
+    // channel or payment method without a reload, without re-running its
+    // distinct-over-all-orders queries every 5 seconds.
+    // The ref stops a successful refresh (which changes `options`) from
+    // re-running this effect into a second fetch on the same tick.
+    if (options && (retryTick % FILTER_OPTIONS_REFRESH_TICKS !== 0 || optionsFetchedTick.current === retryTick)) return;
+    optionsFetchedTick.current = retryTick;
     fetch("/api/filter-options")
       .then(async (r) => {
         const data = await r.json();

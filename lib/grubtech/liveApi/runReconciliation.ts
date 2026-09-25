@@ -28,7 +28,12 @@ const DEFAULT_RECONCILE_WINDOW_DAYS = 30;
 // cents apart), which forced a full re-ingest every 15-minute tick for no
 // real reason. A genuinely missing/extra order moves this by dollars, not
 // cents, so this stays plenty sensitive to real drift.
-const NET_SALES_EPSILON = 0.1;
+// Raised again from 0.1: the hourly 30-day check sat at a constant AED 0.18
+// gap with identical order counts on every run (Sep 24-25), which re-ingested
+// all ~1,100 orders each hour — 18-23 minutes per run, longer than a Vercel
+// function may live — without ever closing the gap. AED 1 still catches any
+// real missing order.
+const NET_SALES_EPSILON = 1;
 
 // A RUNNING row older than this is assumed to be from a crashed process,
 // not a genuinely in-flight check — proceed rather than deadlock forever.
