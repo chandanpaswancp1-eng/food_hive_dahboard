@@ -12,16 +12,10 @@ import {
   safeDiv,
 } from "@/lib/format";
 import { num, sortDesc, loadDimensionMaps } from "./shared";
-import { isTestFixtureName } from "@/lib/grubtech/testFixture";
+import { isPortal } from "@/lib/grubtech/portals";
 import { dubaiDateKey, daysInDubaiMonth } from "@/lib/grubtech/dubaiTime";
 
-// Excluded from the per-portal commission KPI cards: Pickup/Take Away/Dine in
-// are direct, no-commission channels rather than real third-party portals,
-// and "Grubtech Test" is GrubCenter's own sandbox channel. Matched
-// case-insensitively. Any other channel that appears in the data gets its
-// own card automatically.
-const NON_PORTAL_CHANNELS = new Set(["pickup", "take away", "dine in", "grubtech test"]);
-const isPortal = (channel: string) => !NON_PORTAL_CHANNELS.has(channel.toLowerCase());
+// Per-portal commission cards cover every channel isPortal() accepts — see lib/grubtech/portals.ts.
 
 /** Inclusive day count between two "YYYY-MM-DD" calendar-date strings. */
 function daysBetweenInclusive(fromKey: string, toKey: string): number {
@@ -178,15 +172,21 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
     (v) => v.takeHome,
   );
   const portalRows = channelRows.filter((c) => isPortal(c.channel));
-  // Portals with no rate that have no completed sales in scope (e.g. a new
-  // portal whose first order was cancelled) still get a card, so the rate
-  // can be set before it starts counting — unless a channel filter excludes them.
+  // Every portal keeps a card even with no completed sales in scope (e.g. a
+  // new portal whose first order was cancelled, or a date range it didn't
+  // trade in), so its rate can always be set or corrected — unless a channel
+  // filter excludes it.
   const shownChannelIds = new Set(channelCommissions.map((c) => c.channelId));
-  const pendingPortals = [...rateUnsetChannels]
-    .filter((id) => !shownChannelIds.has(id))
-    .map((id) => dims.channels.get(id)?.name)
-    .filter((name): name is string => Boolean(name) && isPortal(name!) && !isTestFixtureName("channel", name!))
-    .filter((name) => !filters.channels?.length || filters.channels.includes(name));
+  const idlePortals = channels
+    .filter((c) => !shownChannelIds.has(c.id))
+    .map((c) => ({
+      channel: dims.channels.get(c.id)?.name ?? "",
+      rateUnset: c.commissionRate === null,
+      commissionRate: Number(c.commissionRate ?? 0),
+      deliveryChargeRate: Number(c.deliveryChargeRate ?? 0),
+    }))
+    .filter((c) => c.channel && isPortal(c.channel))
+    .filter((c) => !filters.channels?.length || filters.channels.includes(c.channel));
   const unsetPortals = portalRows.filter((c) => c.rateUnset).map((c) => c.channel);
   const unsetNote = unsetPortals.length ? `Excludes ${unsetPortals.join(", ")} — commission rate not set` : undefined;
 
@@ -419,13 +419,19 @@ export async function buildIncomeTab(baseWhere: Prisma.OrderWhereInput, filters:
           currentDeliveryChargeRate: c.deliveryChargeRate,
         },
       })),
-      ...pendingPortals.map((channel) => ({
-        key: `portalCommission_${channel}`,
-        label: `${channel} Commission`,
-        value: "Rate not set",
-        subtitle: "New portal · no completed orders yet · click ✎ to set its commission",
+      ...idlePortals.map((c) => ({
+        key: `portalCommission_${c.channel}`,
+        label: `${c.channel} Commission`,
+        value: c.rateUnset ? "Rate not set" : fmtCurrencyCompact(0),
+        subtitle: c.rateUnset
+          ? "New portal · no completed orders yet · click ✎ to set its commission"
+          : `${fmtPercent(c.commissionRate)} commission + ${fmtPercent(c.deliveryChargeRate)} delivery · no completed orders in range`,
         accent: true,
-        editCommission: { channel, currentCommissionRate: 0, currentDeliveryChargeRate: 0 },
+        editCommission: {
+          channel: c.channel,
+          currentCommissionRate: c.commissionRate,
+          currentDeliveryChargeRate: c.deliveryChargeRate,
+        },
       })),
 
       // Group 6 — cash vs. card actually handed over at the point of sale,

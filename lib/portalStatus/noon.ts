@@ -2,7 +2,7 @@ import type { PortalStatus } from "@/lib/types";
 
 // Matches the "Noon" Channel row (the GrubCenter app tile is "Noon Food",
 // but the Channel.name ingested into our DB is just "Noon" — see
-// lib/grubtech/kpis/income.ts's NON_PORTAL_CHANNELS handling for the same
+// lib/grubtech/portals.ts for the same
 // channel-name convention).
 const CHANNEL = "Noon";
 
